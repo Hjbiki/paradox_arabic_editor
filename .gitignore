@@ -1,0 +1,19 @@
+# استبعاد مجلد الملفات الإنجليزية الكبير
+english/
+
+# استبعاد ملفات Python
+*.py
+__pycache__/
+*.pyc
+
+# استبعاد ملفات النظام
+.DS_Store
+Thumbs.db
+*.log
+
+# استبعاد مجلد node_modules إذا كان موجود
+node_modules/
+
+# الاحتفاظ بملف عينة واحد فقط
+!sample.yml
+!core_l_english.yml 

@@ -1,0 +1,12 @@
+l_english:
+  # Sample translations for testing
+  sample_key_1: "This is a sample English text"
+  sample_key_2: "Another sample text with #NT! tag"
+  sample_key_3: "Text with special characters: @#$%^&*()"
+  sample_key_4: "Long text that should be truncated in the preview to test the preview functionality of the translation editor"
+  sample_key_5: "Text with quotes \"inside\" the content"
+  sample_key_6: "Text with #OTHER! tags and #NT! tags"
+  sample_key_7: "Simple text without any special characters"
+  sample_key_8: "Text with numbers 123 and symbols !@#"
+  sample_key_9: "Another long text to test the preview functionality and see how it handles longer content in the translation list"
+  sample_key_10: "Final sample text for testing purposes" 

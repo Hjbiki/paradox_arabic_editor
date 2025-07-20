@@ -1,0 +1,1101 @@
+/* Reset and Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Cairo', sans-serif;
+    background: linear-gradient(135deg, #1a2a2a 0%, #2a3a3a 100%);
+    color: #e0f0f0;
+    direction: rtl;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* Container improvements */
+.container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 100vw;
+    padding: 0;
+    direction: rtl;
+    overflow: hidden;
+}
+
+/* Header و Toolbar محسن - أصغر */
+.header {
+    background: linear-gradient(135deg, #1a2a2a 0%, #2a3a3a 100%);
+    border-bottom: 2px solid #4a6a6a;
+    padding: 0.4rem 0.8rem;
+    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.25);
+    flex-shrink: 0;
+}
+
+  .header h1 i {
+      color: #6a8a9a;
+      font-size: 1.8rem;
+  }
+
+/* Header content - إصلاح صحيح للمحاذاة */
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 100%;
+    margin: 0 auto;
+    gap: 2rem;
+    direction: rtl; /* RTL للتوزيع الصحيح */
+    width: 100%;
+    padding: 0 1rem;
+}
+
+.header h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #e0f0f0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    justify-content: flex-start; /* العنوان على اليمين */
+    direction: rtl;
+}
+
+.header-controls {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    direction: rtl;
+    justify-content: flex-end; /* الأزرار على اليسار */
+}
+
+/* Buttons - أصغر قليلاً */
+.btn {
+    padding: 0.6rem 1rem;
+    background: linear-gradient(135deg, #2a4a4a 0%, #3a5a5a 100%);
+    color: #e0f0f0;
+    border: none;
+    border-radius: 6px;
+    font-family: 'Cairo', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    text-decoration: none;
+    min-width: 90px;
+    justify-content: center;
+}
+
+.btn:hover {
+    background: linear-gradient(135deg, #3a5a5a 0%, #4a6a6a 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #2a5a4a 0%, #3a6a5a 100%);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #3a6a5a 0%, #4a7a6a 100%);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #5a2a2a 0%, #6a3a3a 100%);
+}
+
+.btn-danger:hover {
+    background: linear-gradient(135deg, #6a3a3a 0%, #7a4a4a 100%);
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, #5a4a2a 0%, #6a5a3a 100%);
+}
+
+.btn-warning:hover {
+    background: linear-gradient(135deg, #6a5a3a 0%, #7a6a4a 100%);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Save button states - يبدأ أحمر ويصبح أخضر عند الحفظ */
+.save-btn {
+    background: linear-gradient(135deg, #5a2a2a 0%, #6a3a3a 100%);
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.save-btn.saved {
+    background: linear-gradient(135deg, #2a5a4a 0%, #3a6a5a 100%);
+    animation: none;
+}
+
+.save-btn.unsaved {
+    background: linear-gradient(135deg, #5a2a2a 0%, #6a3a3a 100%);
+    animation: pulse 2s infinite;
+}
+
+.save-btn.unsaved::after {
+    content: " *";
+    color: #ff6b6b;
+    font-weight: bold;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0); }
+}
+
+
+
+
+
+
+/* Main content - مع toolbar */
+.main-content {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    width: 100%;
+    gap: 0;
+    padding: 0;
+    direction: rtl;
+    height: calc(100vh - 120px); /* حساب header + toolbar + footer */
+}
+
+/* Search Container - في panel مفاتيح الترجمة */
+.search-container {
+    padding: 0.6rem;
+    background: #2a3a3a;
+    border-bottom: 1px solid #3a4a4a;
+    flex-shrink: 0;
+}
+
+.search-container input {
+    width: 100%;
+    padding: 0.5rem 0.8rem;
+    background: #1a2a2a;
+    border: 1px solid #3a4a4a;
+    border-radius: 6px;
+    color: #e0f0f0;
+    font-family: 'Cairo', sans-serif;
+    font-size: 0.85rem;
+    direction: rtl;
+    text-align: right;
+    outline: none;
+    transition: border-color 0.3s ease;
+}
+
+.search-container input:focus {
+    border-color: #6c63ff;
+    box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.3);
+    background: #1a2a2a;
+}
+
+.search-container input::placeholder {
+    color: #7a8a8a;
+    direction: rtl;
+    text-align: right;
+}
+
+
+
+.search-container input:not(:placeholder-shown) {
+    background: #1e2e2e;
+    border-color: #5a7a7a;
+    font-weight: 500;
+}
+
+.search-container {
+    position: relative;
+}
+
+.search-container input:focus::placeholder {
+    opacity: 0.5;
+}
+
+/* Panels - الأنماط العامة */
+.left-panel, .right-panel {
+    display: flex;
+    flex-direction: column;
+    background: #2a3a3a;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+/* Left panel (مفاتيح الترجمة) - إحكام أكثر */
+.left-panel {
+    flex: 0 0 260px;
+    min-width: 240px;
+    max-width: 280px;
+    order: 1;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 0;
+    background: #2a3a3a;
+    border-right: 1px solid #4a6a6a;
+    border-left: 1px solid #4a6a6a;
+}
+
+/* Right panel (محرر الترجمة) - استغلال كامل */
+.right-panel {
+    flex: 1;
+    min-width: 0;
+    order: 2;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 0;
+    background: #2a3a3a;
+}
+
+/* Panel headers - أصغر وأكثر إحكاماً */
+.panel-header {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid #4a6a6a;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    direction: rtl;
+    flex-shrink: 0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.panel-header h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #e0f0f0;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.panel-header h3 i {
+    color: #6a8a9a;
+    font-size: 1.2rem;
+}
+
+.stats {
+    font-size: 0.8rem;
+    color: #a0b0b0;
+    font-weight: 500;
+    background: rgba(26, 42, 42, 0.7);
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+    border: 1px solid #3a4a4a;
+}
+
+/* Navigation buttons - محسنة */
+.navigation {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    justify-content: center;
+}
+
+.navigation .btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+    min-width: 70px;
+    background: linear-gradient(135deg, #2a4a5a 0%, #3a5a6a 100%);
+}
+
+.navigation .btn:hover {
+    background: linear-gradient(135deg, #3a5a6a 0%, #4a6a7a 100%);
+    transform: translateY(-1px);
+}
+
+/* Translation List - إحكام شديد */
+.translation-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.2rem;
+    direction: rtl;
+    background: #2a3a3a;
+}
+
+.translation-item {
+    padding: 0.4rem 0.6rem;
+    margin-bottom: 0.1rem;
+    background: #1a2a2a;
+    border: 1px solid #3a4a4a;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    font-size: 0.8rem;
+    direction: rtl;
+    text-align: right;
+    line-height: 1.2;
+}
+
+.translation-item:hover {
+    background: #2a3a3a;
+    border-color: #4a6a6a;
+    transform: translateX(-2px);
+}
+
+.translation-item.selected {
+    background: linear-gradient(135deg, #2a4a6a 0%, #3a5a7a 100%);
+    border-color: #4a6a8a;
+    box-shadow: 0 2px 8px rgba(74, 106, 138, 0.2);
+    transform: translateX(-2px);
+}
+
+.translation-item.modified {
+    background: linear-gradient(135deg, #5a4a2a 0%, #6a5a3a 100%) !important;
+    border-color: #7a6a4a !important;
+    position: relative;
+}
+
+.translation-item.modified::before {
+    content: '●';
+    position: absolute;
+    top: 0.2rem;
+    left: 0.3rem;
+    color: #ffa726;
+    font-size: 0.7rem;
+    font-weight: bold;
+}
+
+.translation-item.modified:hover {
+    background: linear-gradient(135deg, #6a5a3a 0%, #7a6a4a 100%) !important;
+}
+
+.translation-item.modified.selected {
+    background: linear-gradient(135deg, #6a5a3a 0%, #7a6a4a 100%) !important;
+    border-color: #ffa726 !important;
+    box-shadow: 0 4px 15px rgba(255, 167, 38, 0.4) !important;
+}
+
+.translation-key {
+    font-weight: 600;
+    color: #e0f0f0;
+    margin-bottom: 0.1rem;
+    font-size: 0.7rem;
+    direction: ltr;
+    text-align: left;
+    opacity: 0.9;
+    font-family: 'Courier New', monospace;
+    line-height: 1.1;
+}
+
+.translation-value {
+    color: #c0d0d0;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    direction: rtl;
+    text-align: right;
+    max-height: 40px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.translation-preview {
+    color: #a0b0b0;
+    font-size: 0.75rem;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    max-height: 24px;
+}
+
+/* Editor Content - استغلال كامل بدون مساحات ضائعة */
+.editor-content {
+    flex: 1;
+    padding: 1rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    direction: rtl;
+    height: calc(100% - 50px);
+}
+
+/* Field groups - إزالة المساحات الزائدة */
+.field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    direction: rtl;
+}
+
+.field-group:last-child {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.field-group:last-child .translation-input {
+    flex: 1;
+    min-height: 200px;
+}
+
+.field-group label {
+    color: #e0f0f0;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-align: right;
+    margin-bottom: 0.2rem;
+    padding: 0;
+}
+
+/* Key display styling - red background to indicate it's read-only */
+#keyDisplay {
+    background: #2a1a1a !important;
+    border-color: #4a3a3a !important;
+    color: #f0e0e0 !important;
+    font-family: 'Courier New', monospace;
+}
+
+.text-display.original-text {
+    background: #1a2e1a;
+    border-color: #2a5a3a;
+    border-left: 3px solid #4caf50;
+    color: #d4edda;
+    font-style: italic;
+    position: relative;
+}
+
+/* Text displays - أصغر قليلاً */
+.text-display {
+    padding: 0.8rem 1rem;
+    background: #1a2a2a;
+    border: 1px solid #3a4a4a;
+    border-radius: 6px;
+    color: #e0f0f0;
+    font-family: 'Cairo', sans-serif;
+    font-size: 1rem;
+    line-height: 1.5;
+    height: 70px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    resize: none;
+    direction: rtl;
+    text-align: right;
+    overflow-y: auto;
+}
+
+.text-display.original-text {
+    height: 150px; /* أطول للنص المرجعي */
+    padding: 1rem;
+    font-style: normal; /* إزالة الميلان */
+}
+
+/* Translation input - استغلال كامل للمساحة */
+.translation-input {
+    padding: 1rem;
+    background: #1a2a2a;
+    border: 2px solid #3a4a4a;
+    border-radius: 6px;
+    color: #e0f0f0;
+    font-family: 'Cairo', sans-serif;
+    font-size: 1rem;
+    line-height: 1.5;
+    flex: 1;
+    resize: none;
+    direction: rtl;
+    text-align: right;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    min-height: 250px;
+}
+
+.translation-input:focus {
+    outline: none;
+    border-color: #4a6a8a;
+    box-shadow: 0 0 0 3px rgba(74, 106, 138, 0.3);
+}
+
+.translation-input::placeholder {
+    color: #8a9a9a;
+    font-size: 1rem;
+}
+
+/* Action buttons - أصغر */
+.action-buttons {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-top: 0.6rem;
+    justify-content: flex-start;
+    direction: rtl;
+    flex-shrink: 0;
+}
+
+.action-buttons .btn {
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+    min-width: 100px;
+}
+
+/* Status Bar - أصغر جداً */
+.status-bar {
+    background: #1a2a2a;
+    padding: 0.2rem 0.8rem;
+    border-top: 1px solid #3a4a4a;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.7rem;
+    color: #b0c0c0;
+    flex-shrink: 0;
+    height: 24px;
+}
+
+.progress-container {
+    flex: 1;
+    max-width: 200px;
+    margin-right: 1rem;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 4px;
+    background: #3a4a4a;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4a6a6a 0%, #5a7a7a 100%);
+    transition: width 0.3s ease;
+}
+
+/* Icons */
+.icon {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+}
+
+/* Notifications - تحسين الموقع والاختفاء التلقائي */
+.notification {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.8rem 1.2rem;
+    border-radius: 8px;
+    color: #e0f0f0;
+    font-family: 'Cairo', sans-serif;
+    font-weight: 600;
+    z-index: 1000;
+    opacity: 0;
+    transition: all 0.3s ease;
+    max-width: 400px;
+    text-align: center;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.notification.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.notification.success {
+    background: linear-gradient(135deg, #2a5a4a 0%, #3a6a5a 100%);
+    border-left: 4px solid #4a7a6a;
+}
+
+.notification.error {
+    background: linear-gradient(135deg, #5a2a2a 0%, #6a3a3a 100%);
+    border-left: 4px solid #7a4a4a;
+}
+
+.notification.warning {
+    background: linear-gradient(135deg, #5a4a2d 0%, #6a5a3a 100%);
+    color: #f0f0e0;
+    border: 1px solid #7a6a4a;
+}
+
+.notification.info {
+    background: linear-gradient(135deg, #2d5a5a 0%, #3a6a6a 100%);
+    color: #e0f0f0;
+    border: 1px solid #4a7a7a;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(26, 42, 42, 0.9);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.loading-overlay.show {
+    display: flex;
+}
+
+.loading-spinner {
+    text-align: center;
+    color: #e0f0f0;
+}
+
+.loading-spinner i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: #6c63ff;
+}
+
+.loading-spinner p {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+/* Scrollbar - أصغر وأنيق */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1a2a2a;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #4a6a6a;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #5a7a7a;
+}
+
+/* Remove any unnecessary gaps */
+.translation-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.editor-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+/* Responsive - محسن للتخطيط الجديد */
+@media (max-width: 1200px) {
+    .main-content {
+        flex-direction: column;
+        height: calc(100vh - 110px);
+    }
+    
+    .left-panel {
+        flex: 0 0 180px;
+        height: 180px;
+        order: 1;
+        border-radius: 0;
+        border-right: none;
+        border-bottom: 1px solid #4a6a6a;
+    }
+    
+    .right-panel {
+        flex: 1;
+        order: 2;
+        border-radius: 0;
+    }
+    
+    .editor-content {
+        padding: 0.8rem;
+        gap: 0.6rem;
+    }
+    
+    .translation-input {
+        min-height: 150px;
+    }
+    
+    .text-display,
+    .text-display.original-text {
+        height: 50px;
+    }
+}
+
+    @media (max-width: 768px) {
+        .header {
+            padding: 0.3rem 0.5rem;
+        }
+        
+        .header h1 {
+            font-size: 1.4rem;
+        }
+        
+        .main-content {
+            height: calc(100vh - 100px);
+        }
+        
+        .toolbar {
+            padding: 0.3rem 0.5rem;
+            gap: 0.4rem;
+        }
+    
+    .left-panel {
+        height: 140px;
+        flex: 0 0 140px;
+    }
+    
+    .editor-content {
+        padding: 0.6rem;
+        gap: 0.5rem;
+    }
+    
+    .translation-input {
+        min-height: 120px;
+    }
+    
+    .text-display,
+    .text-display.original-text {
+        height: 40px;
+        padding: 0.6rem 0.8rem;
+        font-size: 0.9rem;
+    }
+    
+    .search-group input {
+        min-width: 150px;
+        font-size: 0.8rem;
+    }
+    
+    .panel-header {
+        padding: 0.4rem 0.6rem;
+    }
+    
+    .panel-header h3 {
+        font-size: 1rem;
+    }
+    
+    .translation-item {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.75rem;
+    }
+    
+    .translation-key {
+        font-size: 0.65rem;
+    }
+    
+    .translation-preview {
+        font-size: 0.7rem;
+        max-height: 20px;
+    }
+}
+
+    @media (max-width: 600px) {
+        .header-content {
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 0 0.5rem;
+        }
+        
+        .header h1 {
+            justify-content: center;
+        }
+        
+        .header-controls {
+            width: 100%;
+            justify-content: center;
+        }
+    
+    .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.3rem;
+    }
+    
+    .toolbar-left,
+    .toolbar-right {
+        justify-content: center;
+    }
+    
+            .main-content {
+            height: calc(100vh - 120px);
+        }
+        
+        .toolbar {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0.3rem;
+        }
+        
+        .toolbar-left {
+            justify-content: center;
+        }
+    
+    .left-panel {
+        height: 100px;
+        flex: 0 0 100px;
+    }
+    
+    .editor-content {
+        padding: 0.4rem;
+    }
+    
+    .translation-input {
+        min-height: 100px;
+        font-size: 0.9rem;
+    }
+    
+    .field-group label {
+        font-size: 0.8rem;
+    }
+    
+    .btn {
+        padding: 0.5rem 0.8rem;
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 0;
+    }
+    
+    .header {
+        padding: 0.2rem 0.3rem;
+    }
+    
+    .header h1 {
+        font-size: 1.2rem;
+        gap: 0.3rem;
+    }
+    
+    .toolbar {
+        padding: 0.2rem 0.3rem;
+    }
+    
+    .main-content {
+        height: calc(100vh - 100px);
+    }
+    
+    .left-panel {
+        height: 80px;
+        flex: 0 0 80px;
+    }
+    
+    .translation-item {
+        padding: 0.2rem 0.3rem;
+        margin-bottom: 0.05rem;
+    }
+    
+    .translation-key {
+        font-size: 0.6rem;
+        margin-bottom: 0.05rem;
+    }
+    
+    .translation-preview {
+        font-size: 0.65rem;
+        max-height: 16px;
+        -webkit-line-clamp: 1;
+    }
+    
+    .panel-header {
+        padding: 0.3rem 0.4rem;
+    }
+    
+    .panel-header h3 {
+        font-size: 0.9rem;
+    }
+    
+    .stats {
+        font-size: 0.7rem;
+        padding: 0.1rem 0.4rem;
+    }
+    
+    .editor-content {
+        padding: 0.3rem;
+        gap: 0.3rem;
+    }
+    
+    .text-display,
+    .text-display.original-text {
+        height: 30px;
+        padding: 0.4rem 0.6rem;
+        font-size: 0.8rem;
+    }
+    
+    .translation-input {
+        min-height: 80px;
+        padding: 0.6rem;
+        font-size: 0.85rem;
+    }
+    
+    .action-buttons {
+        gap: 0.4rem;
+        margin-top: 0.4rem;
+    }
+    
+    .action-buttons .btn {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.75rem;
+        min-width: 80px;
+    }
+    
+    .status-bar {
+        padding: 0.1rem 0.4rem;
+        font-size: 0.65rem;
+        height: 20px;
+    }
+}
+
+/* Animation Classes */
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.slide-in {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+    }
+    to {
+        transform: translateX(0);
+    }
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+}
+
+/* Focus and Selection Styles */
+.translation-item:focus {
+    outline: 2px solid #6c63ff;
+    outline-offset: 2px;
+}
+
+.translation-input:focus {
+    outline: 2px solid #6c63ff;
+    outline-offset: 2px;
+}
+
+/* Selection Styles */
+::selection {
+    background: #6c63ff;
+    color: #e0f0f0;
+}
+
+::-moz-selection {
+    background: #6c63ff;
+    color: #e0f0f0;
+} 
+
+/* Footer - صغير وفي الوسط */
+.footer {
+    background: #1a2a2a;
+    padding: 0.2rem 0.5rem;
+    text-align: center;
+    font-size: 0.65rem;
+    color: #8a9a9a;
+    border-top: 1px solid #3a4a4a;
+    flex-shrink: 0;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.footer span {
+    opacity: 0.7;
+    font-weight: 400;
+} 
+
+/* Toolbar */
+.toolbar {
+    background: linear-gradient(135deg, #2a3a3a 0%, #3a4a4a 100%);
+    padding: 0.4rem 0.8rem;
+    border-bottom: 1px solid #4a6a6a;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    max-width: 100%;
+    margin: 0;
+    direction: rtl;
+    flex-shrink: 0;
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.15);
+}
+
+.toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.control-group label {
+    font-weight: 600;
+    color: #e0f0f0;
+    white-space: nowrap;
+    font-size: 0.8rem;
+}
+
+.control-group select {
+    padding: 0.3rem 0.6rem;
+    border: 1px solid #4a6a6a;
+    border-radius: 4px;
+    background: #1a2a2a;
+    color: #e0f0f0;
+    font-family: 'Cairo', sans-serif;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.control-group select:focus {
+    outline: none;
+    border-color: #6c63ff;
+    box-shadow: 0 0 0 2px rgba(108, 99, 255, 0.2);
+} 
