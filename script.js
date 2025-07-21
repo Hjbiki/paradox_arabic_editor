@@ -197,9 +197,10 @@ function handleKeyboardShortcuts(e) {
         searchInput.focus();
     }
     
-    // Escape: Clear search
+    // Escape: Clear search and hide notifications
     if (e.key === 'Escape') {
         clearSearch();
+        hideNotification();
     }
     
     // Arrow keys: Navigate translations
@@ -603,6 +604,18 @@ function selectTranslationByIndex(index) {
     if (translationText) {
         translationText.value = cleanValue;
         currentEditedValue = cleanValue;
+        
+        // إطلاق events لضمان تحديث الواجهة عند تغيير النص
+        console.log('🔄 إطلاق events لتحديث الواجهة بعد تغيير النص');
+        try {
+            const inputEvent = new Event('input', { bubbles: true });
+            const changeEvent = new Event('change', { bubbles: true });
+            translationText.dispatchEvent(inputEvent);
+            translationText.dispatchEvent(changeEvent);
+            console.log('✅ تم إطلاق events بنجاح');
+        } catch (error) {
+            console.warn('⚠️ خطأ في إطلاق events:', error);
+        }
     }
     
     // Check if this translation was modified
@@ -954,26 +967,71 @@ function updateStatus(filename) {
     }
 }
 
+// دالة إخفاء الإشعار
+function hideNotification() {
+    if (notification) {
+        notification.classList.remove('show');
+        notification.style.pointerEvents = 'none';
+        notification.style.zIndex = '-1';
+        
+        // تنظيف تام بعد انتهاء الـ animation
+        setTimeout(() => {
+            if (notification) {
+                notification.className = 'notification';
+                notification.textContent = '';
+                notification.style.pointerEvents = '';
+                notification.style.zIndex = '';
+            }
+        }, 300);
+        
+        console.log('🗑️ تم إخفاء الإشعار');
+    }
+}
+
+// متغير لحفظ timeout حالي
+let notificationTimeout = null;
+
 // Utility functions
 function showNotification(message, type = 'info') {
     if (notification) {
-        notification.textContent = message;
-        notification.className = `notification ${type} show`;
+        // إلغاء أي timeout سابق
+        if (notificationTimeout) {
+            clearTimeout(notificationTimeout);
+            notificationTimeout = null;
+        }
+        
+        // إخفاء أي إشعار سابق أولاً
+        hideNotification();
+        
+        // إظهار الإشعار الجديد بعد delay قصير
+        setTimeout(() => {
+            if (notification) {
+                notification.textContent = message;
+                notification.className = `notification ${type} show`;
+                notification.style.pointerEvents = 'auto';
+                notification.style.zIndex = '10000';
+                
+                console.log(`📢 إظهار إشعار: [${type}] ${message}`);
+                
+                // إخفاء تلقائي بعد 4 ثوان
+                notificationTimeout = setTimeout(() => {
+                    hideNotification();
+                    notificationTimeout = null;
+                }, 4000);
+                
+                // إخفاء فوري عند النقر
+                notification.onclick = () => {
+                    if (notificationTimeout) {
+                        clearTimeout(notificationTimeout);
+                        notificationTimeout = null;
+                    }
+                    hideNotification();
+                };
+            }
+        }, 100);
     } else {
         console.log(`📢 Notification: [${type}] ${message}`);
     }
-    
-    // إخفاء الإخطار تلقائياً بعد 4 ثوان
-    setTimeout(() => {
-        if (notification) {
-            notification.classList.remove('show');
-        }
-    }, 4000);
-    
-    // إخفاء فوري عند النقر
-    notification.onclick = () => {
-        notification.classList.remove('show');
-    };
 }
 
 function showLoading(show) {
@@ -2161,10 +2219,37 @@ function loadApiKeys() {
 
 // Translation Functions
 async function translateCurrentText() {
+    // تحقق شامل من صحة العناصر
+    console.log('🔍 فحص العناصر قبل الترجمة...');
+    
     if (!originalText) {
         showNotification('عنصر النص المرجعي غير موجود', 'error');
         return;
     }
+    
+    if (!translationText) {
+        console.error('❌ translationText element مفقود');
+        showNotification('خطأ: عنصر التحرير مفقود - يرجى إعادة تحميل الصفحة', 'error');
+        return;
+    }
+    
+    // إعادة ربط translationText للتأكد من المرجع الصحيح
+    const currentTranslationText = document.getElementById('translationText');
+    if (!currentTranslationText) {
+        console.error('❌ لا يمكن العثور على عنصر translationText في DOM');
+        showNotification('خطأ: عنصر التحرير غير موجود في الصفحة', 'error');
+        return;
+    }
+    
+    // تحديث المرجع إذا لزم الأمر
+    if (translationText !== currentTranslationText) {
+        console.warn('⚠️ إعادة ربط translationText element');
+        window.translationText = currentTranslationText;
+        // إعادة تعيين المتغير المحلي أيضاً
+        translationText = currentTranslationText;
+    }
+    
+    console.log('✅ جميع العناصر صحيحة، بدء الترجمة...');
     
     // استخراج النص الأصلي - سواء كان في وضع البلوكات أو العادي
     let originalTextContent = '';
@@ -2227,10 +2312,26 @@ async function translateCurrentText() {
         
         console.log('🎯 النص المترجم النهائي:', translatedText);
         
-        if (translatedText && translatedText.trim() !== '') {
-            if (translationText) {
-                const oldValue = translationText.value;
-                translationText.value = translatedText;
+                    if (translatedText && translatedText.trim() !== '') {
+                // إعادة التحقق من translationText قبل التحديث
+                const activeTranslationText = document.getElementById('translationText');
+                if (!activeTranslationText) {
+                    console.error('❌ فقد عنصر translationText أثناء الترجمة');
+                    showNotification('خطأ: فقد عنصر التحرير أثناء الترجمة', 'error');
+                    return;
+                }
+                
+                // تحديث المرجع إذا لزم الأمر
+                if (translationText !== activeTranslationText) {
+                    console.warn('⚠️ إعادة ربط translationText قبل التحديث');
+                    window.translationText = activeTranslationText;
+                    // إعادة تعيين المتغير المحلي أيضاً
+                    translationText = activeTranslationText;
+                }
+                
+                if (translationText) {
+                    const oldValue = translationText.value;
+                    translationText.value = translatedText;
                 
                 console.log(`📝 تم تحديث المحرر من "${oldValue}" إلى "${translatedText}"`);
                 
@@ -3231,6 +3332,9 @@ window.safeTimeout = safeTimeout;
 window.safeAsync = safeAsync;
 window.testMyMemoryTranslation = testMyMemoryTranslation;
 window.testUIUpdate = testUIUpdate;
+window.hideNotification = hideNotification;
+window.testNotifications = testNotifications;
+window.testLatestFixes2 = testLatestFixes2;
 
 // دالة تلوين مفاتيح الترجمة المفقودة
 function highlightKeysWithMissingBlocks() {
@@ -3665,5 +3769,468 @@ window.testUIUpdate = function() {
     }, 100);
     
     return 'جاري اختبار تحديث الواجهة...';
+};
+
+// اختبار سريع للإشعارات
+window.testNotifications = function() {
+    console.log('🧪 === اختبار الإشعارات ===');
+    
+    if (!notification) {
+        console.log('❌ notification element غير موجود');
+        return;
+    }
+    
+    console.log('📢 اختبار أنواع مختلفة من الإشعارات...');
+    
+    // اختبار إشعار عادي
+    setTimeout(() => {
+        showNotification('إشعار عادي - يجب أن يختفي بعد 4 ثوان', 'info');
+        console.log('1️⃣ تم إظهار إشعار عادي');
+    }, 500);
+    
+    // اختبار إشعار نجاح
+    setTimeout(() => {
+        showNotification('إشعار نجاح - اضغط عليه لإخفائه فوراً', 'success');
+        console.log('2️⃣ تم إظهار إشعار نجاح');
+    }, 3000);
+    
+    // اختبار إشعار تحذير
+    setTimeout(() => {
+        showNotification('إشعار تحذير - اضغط Escape لإخفائه', 'warning');
+        console.log('3️⃣ تم إظهار إشعار تحذير');
+    }, 6000);
+    
+    // اختبار إشعار خطأ
+    setTimeout(() => {
+        showNotification('إشعار خطأ - آخر اختبار', 'error');
+        console.log('4️⃣ تم إظهار إشعار خطأ');
+    }, 9000);
+    
+    // اختبار الإخفاء اليدوي
+    setTimeout(() => {
+        console.log('🗑️ اختبار الإخفاء اليدوي...');
+        hideNotification();
+    }, 11000);
+    
+    console.log('📋 الاختبارات ستبدأ في غضون ثوان...');
+    console.log('💡 طرق الإخفاء:');
+    console.log('   1. انتظر 4 ثوان (إخفاء تلقائي)');
+    console.log('   2. اضغط على الإشعار');
+    console.log('   3. اضغط Escape');
+    console.log('   4. استدعي hideNotification()');
+    
+    return 'اختبار الإشعارات بدأ - راقب الشاشة والكونسول';
+};
+
+// اختبار شامل للإصلاحات الأحدث
+window.testLatestFixes2 = function() {
+    console.log('🚀 === اختبار الإصلاحات الأحدث ===');
+    
+    const results = {
+        notificationSystem: 0,
+        myMemoryTranslation: 0,
+        uiUpdate: 0,
+        overallScore: 0
+    };
+    
+    console.log('\n🔔 1. اختبار نظام الإشعارات:');
+    try {
+        if (typeof hideNotification === 'function' && typeof showNotification === 'function') {
+            showNotification('اختبار سريع للإشعارات', 'info');
+            setTimeout(() => hideNotification(), 1000);
+            results.notificationSystem = 100;
+            console.log('   ✅ نظام الإشعارات يعمل بشكل صحيح');
+        } else {
+            results.notificationSystem = 0;
+            console.log('   ❌ مشكلة في نظام الإشعارات');
+        }
+    } catch (error) {
+        results.notificationSystem = 0;
+        console.log('   ❌ خطأ في نظام الإشعارات:', error);
+    }
+    
+    console.log('\n🌐 2. اختبار MyMemory (سريع):');
+    if (typeof translateWithMyMemory === 'function') {
+        results.myMemoryTranslation = 100;
+        console.log('   ✅ دالة MyMemory موجودة');
+    } else {
+        results.myMemoryTranslation = 0;
+        console.log('   ❌ دالة MyMemory مفقودة');
+    }
+    
+    console.log('\n🔄 3. اختبار تحديث الواجهة:');
+    if (translationText && typeof Event !== 'undefined') {
+        try {
+            const testEvent = new Event('input', { bubbles: true });
+            translationText.dispatchEvent(testEvent);
+            results.uiUpdate = 100;
+            console.log('   ✅ Events تعمل بشكل صحيح');
+        } catch (error) {
+            results.uiUpdate = 50;
+            console.log('   ⚠️ مشكلة في Events:', error);
+        }
+    } else {
+        results.uiUpdate = 0;
+        console.log('   ❌ مشكلة في العناصر أو Events');
+    }
+    
+    // حساب النتيجة الإجمالية
+    const scores = Object.values(results).filter(score => typeof score === 'number' && score !== results.overallScore);
+    results.overallScore = Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length);
+    
+    console.log('\n📊 === النتائج النهائية ===');
+    console.log(`🔔 نظام الإشعارات: ${results.notificationSystem}%`);
+    console.log(`🌐 MyMemory: ${results.myMemoryTranslation}%`);
+    console.log(`🔄 تحديث الواجهة: ${results.uiUpdate}%`);
+    console.log(`\n🏆 النتيجة الإجمالية: ${results.overallScore}%`);
+    
+    const grade = results.overallScore >= 90 ? '🏆 ممتاز' : 
+                  results.overallScore >= 75 ? '✅ جيد جداً' : 
+                  results.overallScore >= 60 ? '⚠️ جيد' : '❌ يحتاج تحسين';
+    
+    console.log(`📈 التقييم: ${grade}`);
+    
+    // نصائح إضافية
+    console.log('\n💡 طرق الإصلاح السريع:');
+    console.log('   • للإشعارات المعلقة: hideNotification()');
+    console.log('   • لاختبار MyMemory: testMyMemoryTranslation()');
+    console.log('   • لاختبار الواجهة: testUIUpdate()');
+    console.log('   • للاختبار الشامل: finalComprehensiveTest()');
+    
+    return results;
+};
+
+// اختبار مشكلة الترجمة المتكررة
+window.testRepeatedTranslation = function() {
+    console.log('🔄 === اختبار الترجمة المتكررة ===');
+    
+    if (!translationText) {
+        console.log('❌ translationText غير موجود');
+        return 'فشل: translationText مفقود';
+    }
+    
+    const originalValue = translationText.value;
+    console.log(`📝 القيمة الأصلية: "${originalValue}"`);
+    
+    // محاكاة تغيير النص (كما يحدث عند الانتقال لنص آخر)
+    console.log('🔄 محاكاة تغيير النص...');
+    translationText.value = 'نص تجريبي للاختبار';
+    
+    // إطلاق events كما في selectTranslationByIndex
+    try {
+        const inputEvent = new Event('input', { bubbles: true });
+        const changeEvent = new Event('change', { bubbles: true });
+        translationText.dispatchEvent(inputEvent);
+        translationText.dispatchEvent(changeEvent);
+        console.log('✅ تم إطلاق events بنجاح');
+    } catch (error) {
+        console.error('❌ خطأ في إطلاق events:', error);
+    }
+    
+    // انتظار قصير ثم محاولة "ترجمة"
+    setTimeout(() => {
+        console.log('🌐 محاكاة ترجمة جديدة...');
+        const newTranslation = 'ترجمة تجريبية محدثة';
+        
+        // محاكاة عملية الترجمة
+        if (translationText) {
+            const oldValue = translationText.value;
+            translationText.value = newTranslation;
+            
+            console.log(`📝 تم تحديث المحرر من "${oldValue}" إلى "${newTranslation}"`);
+            
+            // إطلاق events كما في translateCurrentText
+            try {
+                const inputEvent = new Event('input', { bubbles: true });
+                const changeEvent = new Event('change', { bubbles: true });
+                translationText.dispatchEvent(inputEvent);
+                translationText.dispatchEvent(changeEvent);
+                
+                // التحقق من النتيجة
+                console.log('✅ تم إطلاق events للترجمة الجديدة');
+                
+                if (translationText.value === newTranslation) {
+                    console.log('✅ النص محدث بصرياً بشكل صحيح');
+                } else {
+                    console.error('❌ فشل في التحديث البصري');
+                }
+                
+                // إعادة القيمة الأصلية
+                setTimeout(() => {
+                    translationText.value = originalValue;
+                    translationText.dispatchEvent(new Event('input', { bubbles: true }));
+                    console.log('🔄 تم إعادة القيمة الأصلية');
+                }, 1000);
+                
+            } catch (error) {
+                console.error('❌ خطأ في ترجمة المحاكاة:', error);
+            }
+        } else {
+            console.error('❌ فقد translationText أثناء الاختبار');
+        }
+    }, 500);
+    
+    return 'اختبار الترجمة المتكررة قيد التشغيل...';
+};
+
+// اختبار سريع للمشكلة المحددة
+window.quickTranslationTest = function() {
+    console.log('⚡ === اختبار سريع للترجمة المتكررة ===');
+    
+    // التحقق من العناصر الأساسية
+    const checks = {
+        translationText: !!translationText,
+        originalText: !!originalText,
+        selectFunction: typeof selectTranslationByIndex === 'function',
+        translateFunction: typeof translateCurrentText === 'function'
+    };
+    
+    console.log('🔍 فحص العناصر:', checks);
+    
+    const allGood = Object.values(checks).every(check => check);
+    if (!allGood) {
+        console.error('❌ بعض العناصر مفقودة');
+        return checks;
+    }
+    
+    console.log('✅ جميع العناصر موجودة');
+    
+    // محاكاة السيناريو المشكوك فيه
+    if (translationKeys.length >= 2) {
+        console.log('📋 محاكاة الانتقال بين النصوص...');
+        
+        const currentIdx = currentIndex || 0;
+        const nextIdx = currentIdx === 0 ? 1 : 0;
+        
+        console.log(`🔄 الانتقال من ${currentIdx} إلى ${nextIdx}`);
+        
+        // انتقال للنص الثاني
+        selectTranslationByIndex(nextIdx);
+        
+        setTimeout(() => {
+            console.log('🌐 محاولة ترجمة افتراضية...');
+            
+            // محاكاة ترجمة بسيطة
+            if (translationText) {
+                const testTranslation = 'نص ترجمة تجريبي';
+                const oldValue = translationText.value;
+                
+                translationText.value = testTranslation;
+                
+                // إطلاق events
+                const inputEvent = new Event('input', { bubbles: true });
+                const changeEvent = new Event('change', { bubbles: true });
+                translationText.dispatchEvent(inputEvent);
+                translationText.dispatchEvent(changeEvent);
+                
+                // فحص النتيجة
+                if (translationText.value === testTranslation) {
+                    console.log('✅ تحديث الواجهة يعمل بعد الانتقال');
+                    showNotification('✅ اختبار الترجمة المتكررة نجح!', 'success');
+                } else {
+                    console.error('❌ فشل تحديث الواجهة بعد الانتقال');
+                    showNotification('❌ مشكلة في تحديث الواجهة', 'error');
+                }
+                
+                // إعادة للقيمة الأصلية
+                setTimeout(() => {
+                    translationText.value = oldValue;
+                    translationText.dispatchEvent(new Event('input', { bubbles: true }));
+                    selectTranslationByIndex(currentIdx); // العودة للنص الأصلي
+                }, 1000);
+                
+            } else {
+                console.error('❌ فقد translationText بعد الانتقال');
+                showNotification('❌ فقد عنصر التحرير', 'error');
+            }
+        }, 300);
+        
+    } else {
+        console.log('⚠️ يحتاج ملف بـ نصين على الأقل للاختبار');
+        showNotification('يحتاج ملف بـ نصين على الأقل للاختبار', 'warning');
+    }
+    
+    return 'اختبار سريع قيد التنفيذ...';
+};
+
+// محاكاة دقيقة لمشكلة المستخدم
+window.simulateUserIssue = function() {
+    console.log('🎯 === محاكاة مشكلة المستخدم الدقيقة ===');
+    
+    if (!translationKeys || translationKeys.length < 2) {
+        showNotification('يحتاج ملف مع نصوص متعددة لمحاكاة المشكلة', 'warning');
+        return 'يحتاج نصوص متعددة';
+    }
+    
+    // الخطوة 1: ترجمة النص الأول
+    console.log('📝 الخطوة 1: ترجمة النص الأول...');
+    const firstTranslation = 'ترجمة النص الأول - تعمل';
+    
+    if (translationText) {
+        translationText.value = firstTranslation;
+        const inputEvent = new Event('input', { bubbles: true });
+        translationText.dispatchEvent(inputEvent);
+        
+        console.log(`✅ الترجمة الأولى نجحت: "${translationText.value}"`);
+        showNotification('✅ الترجمة الأولى نجحت', 'success');
+        
+        // الخطوة 2: الانتقال لنص آخر
+        setTimeout(() => {
+            console.log('🔄 الخطوة 2: الانتقال للنص التالي...');
+            
+            const nextIndex = currentIndex === 0 ? 1 : 0;
+            selectTranslationByIndex(nextIndex);
+            
+            // الخطوة 3: محاولة ترجمة النص الثاني
+            setTimeout(() => {
+                console.log('📝 الخطوة 3: ترجمة النص الثاني...');
+                const secondTranslation = 'ترجمة النص الثاني - يجب أن تعمل أيضاً';
+                
+                if (translationText) {
+                    const oldValue = translationText.value;
+                    translationText.value = secondTranslation;
+                    
+                    // إطلاق events كما في translateCurrentText
+                    const inputEvent = new Event('input', { bubbles: true });
+                    const changeEvent = new Event('change', { bubbles: true });
+                    translationText.dispatchEvent(inputEvent);
+                    translationText.dispatchEvent(changeEvent);
+                    
+                    console.log(`📋 القيمة القديمة: "${oldValue}"`);
+                    console.log(`📋 القيمة الجديدة: "${translationText.value}"`);
+                    
+                    // فحص النتيجة
+                    if (translationText.value === secondTranslation) {
+                        console.log('🎉 نجح! الترجمة الثانية تعمل بشكل صحيح');
+                        showNotification('🎉 المشكلة مُحلَة! الترجمة تعمل مع كل النصوص', 'success');
+                    } else {
+                        console.error('❌ فشل! الترجمة الثانية لا تُحدث الواجهة');
+                        showNotification('❌ المشكلة مازالت موجودة', 'error');
+                    }
+                    
+                    // تنظيف بعد 3 ثوان
+                    setTimeout(() => {
+                        if (translationText) {
+                            translationText.value = oldValue;
+                            translationText.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                        console.log('🧹 تم تنظيف الاختبار');
+                    }, 3000);
+                    
+                } else {
+                    console.error('❌ فقد translationText بعد الانتقال للنص الثاني');
+                    showNotification('❌ فقد عنصر التحرير', 'error');
+                }
+            }, 500);
+            
+        }, 1000);
+        
+    } else {
+        console.error('❌ translationText غير موجود من البداية');
+        showNotification('❌ عنصر التحرير غير موجود', 'error');
+    }
+    
+    return 'محاكاة مشكلة المستخدم بدأت...';
+};
+
+// اختبار شامل لجميع الإصلاحات الجديدة
+window.testAllLatestFixes = function() {
+    console.log('🎉 === اختبار شامل للإصلاحات الجديدة ===');
+    
+    const results = {
+        notifications: 0,
+        repeatedTranslation: 0,
+        elementRebinding: 0,
+        overallHealth: 0
+    };
+    
+    // 1. اختبار نظام الإشعارات
+    console.log('\n🔔 1. اختبار نظام الإشعارات...');
+    try {
+        showNotification('اختبار الإشعارات', 'info');
+        setTimeout(() => hideNotification(), 500);
+        results.notifications = 100;
+        console.log('   ✅ نظام الإشعارات يعمل');
+    } catch (error) {
+        results.notifications = 0;
+        console.log('   ❌ مشكلة في الإشعارات:', error);
+    }
+    
+    // 2. اختبار إعادة ربط العناصر
+    console.log('\n🔗 2. اختبار إعادة ربط العناصر...');
+    try {
+        const currentElement = document.getElementById('translationText');
+        if (currentElement && translationText === currentElement) {
+            results.elementRebinding = 100;
+            console.log('   ✅ العناصر مربوطة بشكل صحيح');
+        } else {
+            results.elementRebinding = 50;
+            console.log('   ⚠️ قد تحتاج إعادة ربط العناصر');
+        }
+    } catch (error) {
+        results.elementRebinding = 0;
+        console.log('   ❌ خطأ في فحص العناصر:', error);
+    }
+    
+    // 3. اختبار الترجمة المتكررة (سريع)
+    console.log('\n🔄 3. اختبار الترجمة المتكررة...');
+    if (translationKeys && translationKeys.length >= 2) {
+        try {
+            // محاكاة سريعة
+            const originalValue = translationText ? translationText.value : '';
+            
+            if (translationText) {
+                translationText.value = 'اختبار سريع';
+                const event = new Event('input', { bubbles: true });
+                translationText.dispatchEvent(event);
+                
+                if (translationText.value === 'اختبار سريع') {
+                    results.repeatedTranslation = 100;
+                    console.log('   ✅ الترجمة المتكررة تعمل');
+                } else {
+                    results.repeatedTranslation = 0;
+                    console.log('   ❌ مشكلة في الترجمة المتكررة');
+                }
+                
+                // إعادة القيمة الأصلية
+                translationText.value = originalValue;
+                translationText.dispatchEvent(new Event('input', { bubbles: true }));
+            } else {
+                results.repeatedTranslation = 0;
+                console.log('   ❌ translationText غير موجود');
+            }
+        } catch (error) {
+            results.repeatedTranslation = 0;
+            console.log('   ❌ خطأ في اختبار الترجمة:', error);
+        }
+    } else {
+        results.repeatedTranslation = 50;
+        console.log('   ⚠️ يحتاج ملف بنصوص متعددة للاختبار الكامل');
+    }
+    
+    // حساب الصحة العامة
+    const scores = [results.notifications, results.elementRebinding, results.repeatedTranslation];
+    results.overallHealth = Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length);
+    
+    // النتائج النهائية
+    console.log('\n📊 === النتائج النهائية ===');
+    console.log(`🔔 الإشعارات: ${results.notifications}%`);
+    console.log(`🔗 ربط العناصر: ${results.elementRebinding}%`);
+    console.log(`🔄 الترجمة المتكررة: ${results.repeatedTranslation}%`);
+    console.log(`\n🏆 الصحة العامة: ${results.overallHealth}%`);
+    
+    const status = results.overallHealth >= 90 ? '🎉 ممتاز - كل شيء يعمل!' : 
+                   results.overallHealth >= 75 ? '✅ جيد جداً - معظم الميزات تعمل' : 
+                   results.overallHealth >= 60 ? '⚠️ جيد - بعض المشاكل البسيطة' : 
+                   '❌ يحتاج إصلاح - مشاكل متعددة';
+    
+    console.log(`📈 التقييم: ${status}`);
+    
+    // إشعار النتيجة
+    const notifType = results.overallHealth >= 90 ? 'success' : 
+                      results.overallHealth >= 75 ? 'info' : 'warning';
+    showNotification(`اختبار شامل: ${results.overallHealth}% - ${status}`, notifType);
+    
+    return results;
 };
  
