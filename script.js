@@ -2231,13 +2231,52 @@ async function translateCurrentText() {
             if (translationText) {
                 const oldValue = translationText.value;
                 translationText.value = translatedText;
-                translationText.focus();
                 
                 console.log(`📝 تم تحديث المحرر من "${oldValue}" إلى "${translatedText}"`);
                 
+                // إطلاق events لتحديث الواجهة
+                console.log('🔥 إطلاق events لتحديث الواجهة...');
+                
+                // إطلاق input event لتحديث الواجهة
+                const inputEvent = new Event('input', { bubbles: true });
+                translationText.dispatchEvent(inputEvent);
+                
+                // إطلاق change event أيضاً
+                const changeEvent = new Event('change', { bubbles: true });
+                translationText.dispatchEvent(changeEvent);
+                
+                // تحديث حالة التعديل يدوياً
+                hasUnsavedChanges = true;
+                if (currentEditingKey) {
+                    modifiedKeys.add(currentEditingKey);
+                    translations[currentEditingKey] = translatedText;
+                    filteredTranslations[currentEditingKey] = translatedText;
+                    console.log(`✅ تم تحديث الترجمة للمفتاح: ${currentEditingKey}`);
+                }
+                
+                // تحديث preview في القائمة
+                const items = translationList.querySelectorAll('.translation-item');
+                if (items[currentIndex]) {
+                    items[currentIndex].classList.add('modified');
+                    const preview = translatedText.length > previewLength ? 
+                        translatedText.substring(0, previewLength) + '...' : translatedText;
+                    const previewElement = items[currentIndex].querySelector('.translation-preview');
+                    if (previewElement) {
+                        previewElement.textContent = preview;
+                    }
+                    console.log('✅ تم تحديث preview في القائمة');
+                }
+                
+                // تحديث الإحصائيات
+                updateStats();
+                updateSaveButton();
+                
+                // التركيز على المحرر
+                translationText.focus();
+                
                 // التحقق من أن التحديث تم بنجاح
                 if (translationText.value === translatedText) {
-                    console.log('✅ تأكيد: النص تم تحديثه بنجاح في المحرر');
+                    console.log('✅ تأكيد: النص تم تحديثه بنجاح في المحرر والواجهة');
                 } else {
                     console.error('❌ فشل تحديث النص في المحرر');
                     showNotification('خطأ في تحديث النص في المحرر', 'error');
@@ -2253,29 +2292,7 @@ async function translateCurrentText() {
             showNotification('النص المترجم فارغ - يرجى المحاولة مرة أخرى', 'warning');
             return;
         }
-            
-            // Mark as modified
-            hasUnsavedChanges = true;
-            if (currentEditingKey) {
-                modifiedKeys.add(currentEditingKey);
-                translations[currentEditingKey] = translatedText;
-                filteredTranslations[currentEditingKey] = translatedText;
-                
-                // Update list item
-                const items = translationList.querySelectorAll('.translation-item');
-                if (items[currentIndex]) {
-                    items[currentIndex].classList.add('modified');
-                    const preview = translatedText.length > previewLength ? 
-                        translatedText.substring(0, previewLength) + '...' : translatedText;
-                    const previewElement = items[currentIndex].querySelector('.translation-preview');
-                    if (previewElement) {
-                        previewElement.textContent = preview;
-                    }
-                }
-                
-                updateStats();
-            }
-            updateSaveButton();
+
             
             showNotification(`تم ترجمة النص بواسطة ${getServiceName(selectedService)} 🎯`, 'success');
         
@@ -3213,6 +3230,7 @@ window.highlightKeysWithMissingBlocks = highlightKeysWithMissingBlocks;
 window.safeTimeout = safeTimeout;
 window.safeAsync = safeAsync;
 window.testMyMemoryTranslation = testMyMemoryTranslation;
+window.testUIUpdate = testUIUpdate;
 
 // دالة تلوين مفاتيح الترجمة المفقودة
 function highlightKeysWithMissingBlocks() {
@@ -3562,10 +3580,19 @@ window.testMyMemoryTranslation = function() {
             if (translationText) {
                 const oldValue = translationText.value;
                 translationText.value = result;
+                
+                // إطلاق events لتحديث الواجهة
+                const inputEvent = new Event('input', { bubbles: true });
+                translationText.dispatchEvent(inputEvent);
+                
+                const changeEvent = new Event('change', { bubbles: true });
+                translationText.dispatchEvent(changeEvent);
+                
                 console.log(`📝 تم تحديث المحرر من "${oldValue}" إلى "${result}"`);
+                console.log('🔥 تم إطلاق events لتحديث الواجهة');
                 
                 if (translationText.value === result) {
-                    console.log('✅ تأكيد: تحديث المحرر نجح');
+                    console.log('✅ تأكيد: تحديث المحرر والواجهة نجح');
                     showNotification('✅ اختبار MyMemory نجح!', 'success');
                 } else {
                     console.log('❌ فشل تحديث المحرر');
@@ -3597,5 +3624,46 @@ window.testMyMemoryTranslation = function() {
     }, 1000);
     
     return 'اختبار MyMemory بدأ - شوف النتائج في الكونسول';
+};
+
+// اختبار سريع لتحديث الواجهة
+window.testUIUpdate = function() {
+    console.log('🧪 === اختبار تحديث الواجهة ===');
+    
+    if (!translationText) {
+        console.log('❌ translationText غير موجود');
+        return;
+    }
+    
+    const testText = 'نص تجريبي للاختبار ' + Date.now();
+    const oldValue = translationText.value;
+    
+    console.log(`📝 القيمة الحالية: "${oldValue}"`);
+    console.log(`📝 القيمة الجديدة: "${testText}"`);
+    
+    // تحديث النص
+    translationText.value = testText;
+    
+    // إطلاق events
+    console.log('🔥 إطلاق input event...');
+    const inputEvent = new Event('input', { bubbles: true });
+    translationText.dispatchEvent(inputEvent);
+    
+    console.log('🔥 إطلاق change event...');
+    const changeEvent = new Event('change', { bubbles: true });
+    translationText.dispatchEvent(changeEvent);
+    
+    // التحقق
+    setTimeout(() => {
+        if (translationText.value === testText) {
+            console.log('✅ تحديث القيمة نجح');
+            showNotification('✅ تحديث الواجهة يعمل!', 'success');
+        } else {
+            console.log('❌ فشل تحديث القيمة');
+            showNotification('❌ مشكلة في تحديث الواجهة', 'error');
+        }
+    }, 100);
+    
+    return 'جاري اختبار تحديث الواجهة...';
 };
  
