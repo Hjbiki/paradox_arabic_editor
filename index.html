@@ -34,12 +34,17 @@
                 <div class="control-group">
                     <label for="fontSize">حجم الخط:</label>
                     <select id="fontSize" onchange="changeFontSize()">
-                        <option value="12">12</option>
-                        <option value="14" selected>14</option>
-                        <option value="16">16</option>
-                        <option value="18">18</option>
-                        <option value="20">20</option>
-                        <option value="24">24</option>
+                        <option value="10">10 (صغير جداً)</option>
+                        <option value="11">11 (صغير)</option>
+                        <option value="12">12 (عادي صغير)</option>
+                        <option value="14" selected>14 (افتراضي)</option>
+                        <option value="16">16 (متوسط)</option>
+                        <option value="18">18 (كبير)</option>
+                        <option value="20">20 (كبير جداً)</option>
+                        <option value="22">22 (ضخم)</option>
+                        <option value="24">24 (ضخم جداً)</option>
+                        <option value="28">28 (عملاق)</option>
+                        <option value="32">32 (عملاق جداً)</option>
                     </select>
                 </div>
                 <div class="control-group">
@@ -101,17 +106,6 @@
                 </div>
 
                 <div class="editor-content">
-                    <!-- Key Display -->
-                    <div class="field-group">
-                        <label>المفتاح:</label>
-                        <div class="text-display-container">
-                            <div class="text-display" id="keyDisplay" readonly></div>
-                            <button class="copy-icon" onclick="copyToClipboard('keyDisplay')" title="نسخ المفتاح">
-                                <i class="fas fa-copy"></i>
-                            </button>
-                        </div>
-                    </div>
-
                     <!-- Original Text -->
                     <div class="field-group">
                         <label>النص المرجعي (إنجليزي):</label>
@@ -139,6 +133,15 @@
                     <div class="action-buttons">
                         <button class="btn btn-warning" onclick="undoChanges()">
                             <i class="fas fa-undo"></i> إعادة تعيين
+                        </button>
+                        <button class="btn btn-info" onclick="toggleBlocksMode()" title="تفعيل/إيقاف وضع البلوكات">
+                            <i class="fas fa-cubes"></i> وضع البلوكات
+                        </button>
+                        <button class="btn btn-secondary" onclick="insertNewline()" title="إضافة سطر جديد \\n في مكان الكتابة (أو Shift+Enter)">
+                            <i class="fas fa-level-down-alt"></i> + سطر
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" onclick="cleanupDuplicateBlocksEditors()" title="تنظيف العناصر المكررة (للطوارئ فقط)" style="font-size: 0.8em; padding: 0.25rem 0.5rem;">
+                            <i class="fas fa-broom"></i>
                         </button>
                     </div>
                 </div>
@@ -183,6 +186,11 @@
                     <h4><i class="fas fa-robot"></i> Claude (Anthropic)</h4>
                     <input type="password" id="claudeApiKey" placeholder="أدخل مفتاح Claude API" class="api-input">
                     <small>احصل على المفتاح من: <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a></small>
+                    <div style="background: #fff3cd; padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem;">
+                        <small style="color: #856404;">
+                            💡 <strong>حل CORS:</strong> نزّل <a href="https://chrome.google.com/webstore/search/cors%20unblock" target="_blank">CORS extension</a> للمتصفح
+                        </small>
+                    </div>
                 </div>
                 
                 <div class="settings-group">
