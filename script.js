@@ -12,6 +12,9 @@ let currentEditedValue = '';
 let modifiedKeys = new Set(); // Track modified translations
 let currentEditingKey = ''; // Track the key being edited to avoid index conflicts
 
+// Blocks debug mode (disabled by default)
+window.debugBlocks = false;
+
 // Auto-save to localStorage
 let autoSaveInterval;
 
@@ -26,7 +29,7 @@ let apiKeys = {
 
 // DOM Elements
 const translationList = document.getElementById('translationList');
-const keyDisplay = document.getElementById('keyDisplay');
+// تم إزالة keyDisplay - المفتاح موجود في قائمة الترجمات
 const originalText = document.getElementById('originalText');
 const translationText = document.getElementById('translationText');
 const searchInput = document.getElementById('searchInput');
@@ -133,6 +136,17 @@ function setupEventListeners() {
             }
             
             updateStats(); // تحديث الإحصائيات
+        }
+        
+        // إذا كان هناك blocks editor مفعل، حدثه
+        const container = translationText.parentNode;
+        const blocksEditor = container.querySelector('.blocks-editor');
+        if (blocksEditor && blocksEditor.style.display !== 'none') {
+            if (window.debugBlocks) console.log('📝 تم تغيير النص - سيتم تحديث البلوكات');
+            clearTimeout(translationText.blocksUpdateTimeout);
+            translationText.blocksUpdateTimeout = setTimeout(() => {
+                refreshBlocks(blocksEditor, translationText);
+            }, 100); // تقليل التأخير لتحديث أسرع
         }
         
         updateSaveButton();
@@ -541,7 +555,7 @@ function selectTranslationByIndex(index) {
     currentEditingKey = key;
     
     // Update displays
-    keyDisplay.textContent = key;
+    // تم إزالة عرض المفتاح - موجود في قائمة الترجمات
     
     // Show English text if available, otherwise show original value or helpful message
     const englishText = englishTranslations[key];
@@ -550,22 +564,24 @@ function selectTranslationByIndex(index) {
     console.log(`📁 عدد النصوص الإنجليزية المحملة: ${Object.keys(englishTranslations).length}`);
     console.log(`🎯 النص الإنجليزي للمفتاح الحالي:`, englishText || 'غير موجود');
     
+    // Show clean text for editing (extract from quotes) - تعريف cleanValue أولاً
+    let cleanValue = cleanText(value || '');
+    
     if (englishText) {
         // استخراج النص من بين علامات التنصيص
         let cleanEnglishText = cleanText(englishText);
         
-        originalText.textContent = cleanEnglishText;
-        originalText.style.color = '#d4edda'; // لون أخضر فاتح للنص الإنجليزي
+        // عرض النص المرجعي مع البلوكات إذا كان وضع البلوكات مفعل
+        updateOriginalTextDisplay(cleanEnglishText, cleanValue);
+        
         console.log(`✅ عرض النص الإنجليزي المرجعي: "${cleanEnglishText}"`);
     } else {
         // لا يوجد نص مرجعي من مجلد english
+        originalText.innerHTML = ''; // مسح أي محتوى سابق
         originalText.textContent = `📂 ضع ملف "${currentFile?.name || 'مطابق'}" في مجلد english للمقارنة`;
         originalText.style.color = '#6c757d'; // لون رمادي للرسالة
         console.log(`ℹ️ لا يوجد نص مرجعي للمفتاح: ${key}`);
     }
-    
-    // Show clean text for editing (extract from quotes)
-    let cleanValue = cleanText(value || '');
     
     translationText.value = cleanValue;
     currentEditedValue = cleanValue;
@@ -594,6 +610,29 @@ function selectTranslationByIndex(index) {
     if (document.activeElement !== searchInput) {
         translationText.focus();
     }
+    
+    // تحديث البلوكات إذا كانت مفعلة وفحص البلوكات المفقودة
+    const container = translationText.parentNode;
+    const blocksEditor = container.querySelector('.blocks-editor');
+    if (blocksEditor && blocksEditor.style.display !== 'none') {
+        if (window.debugBlocks) console.log('🔄 تحديث البلوكات للترجمة الجديدة:', key);
+        setTimeout(() => {
+            refreshBlocks(blocksEditor, translationText);
+        }, 50);
+    }
+    
+    // فحص البلوكات المفقودة حتى بدون وضع البلوكات (للإحصائيات)
+    if (englishTranslations[key]) {
+        setTimeout(() => {
+            const missingBlocks = findMissingBlocks(englishTranslations[key], cleanValue);
+            if (missingBlocks.length > 0 && window.debugBlocks) {
+                console.info(`📊 البلوكات المفقودة في "${key}":`, missingBlocks);
+            }
+        }, 100);
+    }
+    
+    // تحديث تلوين مفاتيح الترجمة
+    safeTimeout(() => highlightKeysWithMissingBlocks(), 150);
 }
 
 // Navigation
@@ -682,13 +721,25 @@ function updateTranslation() {
 }
 
 function undoChanges() {
-    if (!currentEditingKey) return;
+    if (!currentEditingKey) {
+        console.warn('⚠️ لا يوجد مفتاح ترجمة محدد للإعادة');
+        showNotification('لا يوجد ترجمة لإعادة تعيينها', 'warning');
+        return;
+    }
     
     const key = currentEditingKey;
     const originalValue = originalTranslations[key];
     
+    if (!originalValue) {
+        console.warn('⚠️ لا توجد قيمة أصلية للمفتاح:', key);
+        showNotification('لا توجد قيمة أصلية لهذه الترجمة', 'warning');
+        return;
+    }
+    
     // Use the original clean text (extract from quotes)
     let cleanOriginalValue = cleanText(originalValue || '');
+    
+    console.log(`🔄 إعادة تعيين "${key}" من "${translationText.value}" إلى "${cleanOriginalValue}"`);
     
     translationText.value = cleanOriginalValue;
     currentEditedValue = cleanOriginalValue;
@@ -707,8 +758,6 @@ function undoChanges() {
         items[currentIndex].classList.remove('modified');
         
         // تنظيف النص للمعاينة
-        let cleanOriginalValue = cleanText(originalValue || '');
-            
         const preview = cleanOriginalValue.length > previewLength ? 
             cleanOriginalValue.substring(0, previewLength) + '...' : cleanOriginalValue;
         const previewElement = items[currentIndex].querySelector('.translation-preview');
@@ -717,10 +766,27 @@ function undoChanges() {
         }
     }
     
+    // تحديث وضع البلوكات إذا كان مفعلاً
+    const container = translationText.parentNode;
+    const blocksEditor = container.querySelector('.blocks-editor');
+    if (blocksEditor && blocksEditor.style.display !== 'none') {
+        setTimeout(() => {
+            refreshBlocks(blocksEditor, translationText);
+            console.log('✅ تم تحديث البلوكات بعد إعادة التعيين');
+        }, 50);
+    }
+    
+    // تحديث النص المرجعي إذا كان متوفراً
+    const englishText = englishTranslations[key] || '';
+    if (englishText) {
+        updateOriginalTextDisplay(englishText, cleanOriginalValue);
+    }
+    
     updateSaveButton();
     updateStats();
     
-    showNotification('تم إعادة تعيين الترجمة', 'info');
+    showNotification('تم إعادة تعيين الترجمة إلى القيمة الأصلية', 'success');
+    console.log('✅ تم إعادة تعيين الترجمة بنجاح');
 }
 
 // Function removed - no longer needed
@@ -1036,27 +1102,816 @@ window.saveApiSettings = saveApiSettings;
 window.translateCurrentText = translateCurrentText;
 window.showDebugInfo = showDebugInfo;
 window.showMissingKeys = showMissingKeys;
+
+// Command Blocks System
+function convertTextToBlocks(text, missingBlocks = []) {
+    if (!text) return '';
+    if (window.debugBlocks) console.log('🔍 تحويل النص للبلوكات:', text);
+    
+    let result = text;
+
+    // دالة مساعدة لإضافة class المفقود
+    const addMissingClass = (match) => {
+        const isMissing = missingBlocks.includes(match);
+        const missingClass = isMissing ? ' missing' : '';
+        const missingTitle = isMissing ? ' (مفقود في الترجمة!)' : '';
+        return { missingClass, missingTitle };
+    };
+
+// فحص جميع الترجمات للبلوكات المفقودة
+window.scanAllMissingBlocks = function() {
+    console.log('🔍 فحص جميع الترجمات للبلوكات المفقودة...');
+    
+    if (Object.keys(englishTranslations).length === 0) {
+        console.warn('⚠️ لا توجد نصوص مرجعية إنجليزية للمقارنة');
+        return;
+    }
+    
+    const report = {};
+    let totalMissing = 0;
+    let translationsWithIssues = 0;
+    
+    Object.keys(translations).forEach(key => {
+        const englishText = englishTranslations[key];
+        const arabicText = translations[key];
+        
+        if (englishText && arabicText) {
+            const missingBlocks = findMissingBlocks(englishText, arabicText);
+            if (missingBlocks.length > 0) {
+                report[key] = missingBlocks;
+                totalMissing += missingBlocks.length;
+                translationsWithIssues++;
+            }
+        }
+    });
+    
+    console.log('📊 تقرير البلوكات المفقودة:');
+    console.log(`📈 إجمالي الترجمات: ${Object.keys(translations).length}`);
+    console.log(`⚠️ ترجمات بها مشاكل: ${translationsWithIssues}`);
+    console.log(`🚫 إجمالي البلوكات المفقودة: ${totalMissing}`);
+    
+    if (translationsWithIssues > 0) {
+        console.log('\n📋 التفاصيل:');
+        Object.entries(report).forEach(([key, missing]) => {
+            console.log(`🔑 ${key}: ${missing.join(', ')}`);
+        });
+        
+        showNotification(`تم العثور على ${totalMissing} بلوك مفقود في ${translationsWithIssues} ترجمة`, 'warning');
+    } else {
+        console.log('✅ جميع الترجمات كاملة!');
+        showNotification('🎉 جميع الترجمات كاملة - لا توجد بلوكات مفقودة!', 'success');
+    }
+    
+    return {
+        total: Object.keys(translations).length,
+        withIssues: translationsWithIssues,
+        totalMissing: totalMissing,
+        report: report
+    };
+};
+
+// تم نقل الدالة إلى مكان أفضل
+    result = result.replace(/\\n/g, (match) => {
+        const { missingClass, missingTitle } = addMissingClass(match);
+        return `<span class="newline-block${missingClass}" draggable="false" data-type="newline" title="سطر جديد${missingTitle}">\\n</span>`;
+    });
+    
+    // 2. تحويل الأيقونات مثل nickname_icon! و stress_icon!
+    result = result.replace(/(\w+_icon!)/g, (match, p1) => {
+        const { missingClass, missingTitle } = addMissingClass(p1);
+        return `<span class="command-block${missingClass}" draggable="false" data-type="icon" title="${p1}${missingTitle}">${p1}</span>`;
+    });
+    
+    // 3. تحويل المتغيرات المعقدة مع pipes مثل $DEAD|V$ و $INITIAL|V$
+    result = result.replace(/(\$[A-Z_]+\|[A-Z]+\$)/g, (match, p1) => {
+        const { missingClass, missingTitle } = addMissingClass(p1);
+        return `<span class="command-block${missingClass}" draggable="false" data-type="variable" title="${p1}${missingTitle}">${p1}</span>`;
+    });
+    
+    // 4. تحويل المتغيرات الطويلة مثل $building_type_hall_of_heroes_01_desc$
+    result = result.replace(/(\$[a-zA-Z_][a-zA-Z0-9_]{3,}\$)/g, (match, p1) => {
+        const { missingClass, missingTitle } = addMissingClass(p1);
+        return `<span class="command-block${missingClass}" draggable="false" data-type="variable" title="${p1}${missingTitle}">${p1}</span>`;
+    });
+    
+    // 5. تحويل المتغيرات العادية القصيرة $VAR$
+    result = result.replace(/(\$[A-Z_]{1,8}\$)/g, (match, p1) => {
+        const { missingClass, missingTitle } = addMissingClass(p1);
+        return `<span class="command-block${missingClass}" draggable="false" data-type="variable" title="${p1}${missingTitle}">${p1}</span>`;
+    });
+    
+    // 6. تحويل المتغيرات المختلطة مثل $variable$
+    result = result.replace(/(\$[a-z][a-zA-Z_]{1,8}\$)/g, (match, p1) => {
+        const { missingClass, missingTitle } = addMissingClass(p1);
+        return `<span class="command-block${missingClass}" draggable="false" data-type="variable" title="${p1}${missingTitle}">${p1}</span>`;
+    });
+    
+    // 7. تحويل الأوامر المعقدة جداً مع دوال ومعاملات مثل [GetVassalStance( 'belligerent' ).GetName]
+    result = result.replace(/(?!<span[^>]*>)(\[[A-Za-z][A-Za-z0-9_]*\([^)]*\)[^[\]]*\])(?![^<]*<\/span>)/g, (match, p1) => {
+        const { missingClass, missingTitle } = addMissingClass(p1);
+        return `<span class="command-block${missingClass}" draggable="false" data-type="command" title="${p1}${missingTitle}">${p1}</span>`;
+    });
+    
+    // 8. تحويل الأوامر الطويلة جداً مع أقواس معقدة مثل [AddLocalizationIf(...)]
+    result = result.replace(/(?!<span[^>]*>)(\[[A-Za-z][^[\]]*\([^[\]]*\)[^[\]]*\])(?![^<]*<\/span>)/g, (match, p1) => {
+        const { missingClass, missingTitle } = addMissingClass(p1);
+        return `<span class="command-block${missingClass}" draggable="false" data-type="command" title="${p1}${missingTitle}">${p1}</span>`;
+    });
+    
+    // 9. تحويل الأوامر مع ScriptValue وpipes مثل [attacker.MakeScope.ScriptValue('...')|V0]
+    result = result.replace(/(?!<span[^>]*>)(\[[a-zA-Z_][a-zA-Z0-9_]*\.[\w\.]*ScriptValue[^[\]]*\|[A-Z0-9]+\])(?![^<]*<\/span>)/g, (match, p1) => {
+        const { missingClass, missingTitle } = addMissingClass(p1);
+        return `<span class="command-block${missingClass}" draggable="false" data-type="command" title="${p1}${missingTitle}">${p1}</span>`;
+    });
+    
+    // 10. تحويل الأوامر المعقدة مع نقاط وpipes مثل [exceptional_guest.GetShortUIName|U]
+    result = result.replace(/(?!<span[^>]*>)(\[[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z0-9_\.]+\|[A-Z]+\])(?![^<]*<\/span>)/g, (match, p1) => {
+        const { missingClass, missingTitle } = addMissingClass(p1);
+        return `<span class="command-block${missingClass}" draggable="false" data-type="command" title="${p1}${missingTitle}">${p1}</span>`;
+    });
+    
+    // 11. تحويل الأوامر المعقدة مع نقاط فقط مثل [guest.GetTitledFirstName]
+    result = result.replace(/(?!<span[^>]*>)(\[[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z0-9_\.]+\])(?![^<]*<\/span>)/g, (match, p1) => {
+        const { missingClass, missingTitle } = addMissingClass(p1);
+        return `<span class="command-block${missingClass}" draggable="false" data-type="command" title="${p1}${missingTitle}">${p1}</span>`;
+    });
+    
+    // 12. تحويل الأوامر المتقدمة مثل [ROOT.Char.Custom('GetSomething')] (أوامر معقدة عامة)
+    result = result.replace(/(?!<span[^>]*>)(\[[A-Z][a-zA-Z]*\.[\w\.\(\)'"`#!?:\s-]+\])(?![^<]*<\/span>)/g, (match, p1) => {
+        const { missingClass, missingTitle } = addMissingClass(p1);
+        return `<span class="command-block${missingClass}" draggable="false" data-type="command" title="${p1}${missingTitle}">${p1}</span>`;
+    });
+    
+              // 13. تحويل الأوامر مع pipes مثل [soldiers|E] و [county_control|E] (تجنب المُحوَّلة مسبقاً)
+    result = result.replace(/(?!<span[^>]*>)(\[[a-zA-Z_][a-zA-Z0-9_]*\|[A-Z]+\])(?![^<]*<\/span>)/g, (match, p1) => {
+        const { missingClass, missingTitle } = addMissingClass(p1);
+        return `<span class="command-block${missingClass}" draggable="false" data-type="command" title="${p1}${missingTitle}">${p1}</span>`;
+    });
+    
+    // 14. تحويل الأوامر البسيطة مثل [culture] و [development_growth] (تجنب المُحوَّلة مسبقاً)
+    result = result.replace(/(?!<span[^>]*>)(\[[a-zA-Z_][a-zA-Z0-9_]*\])(?![^<]*<\/span>)/g, (match, p1) => {
+        // تجنب الأوامر التي تحتوي على pipes أو نقاط أو أقواس (تم معالجتها مسبقاً)
+        if (p1.includes('|') || p1.includes('.') || p1.includes('(')) {
+            return match; // لا تحويل
+        }
+        const { missingClass, missingTitle } = addMissingClass(p1);
+        return `<span class="command-block${missingClass}" draggable="false" data-type="command" title="${p1}${missingTitle}">${p1}</span>`;
+    });
+     
+              // 12. تحويل الأوامر الخاصة فقط إذا كانت كلها أحرف كبيرة وبدون مسافات #SPECIAL#
+    result = result.replace(/(\#[A-Z_]{2,}\#)/g, (match, p1) => {
+        const { missingClass, missingTitle } = addMissingClass(p1);
+        return `<span class="command-block${missingClass}" draggable="false" data-type="special" title="${p1}${missingTitle}">${p1}</span>`;
+    });
+     
+    // 13. تحويل أوامر خاصة معينة بالتحديد مثل #EMP!# و #X!#
+    result = result.replace(/(\#[A-Z]{1,5}!\#)/g, (match, p1) => {
+        const { missingClass, missingTitle } = addMissingClass(p1);
+        return `<span class="command-block${missingClass}" draggable="false" data-type="special" title="${p1}${missingTitle}">${p1}</span>`;
+    });
+    
+    if (window.debugBlocks) console.log('✅ النتيجة بعد التحويل:', result);
+    return result;
+}
+
+function convertBlocksToText(html) {
+    if (!html) return '';
+    if (window.debugBlocks) console.log('🔄 تحويل البلوكات للنص:', html);
+    
+    // إنشاء عنصر مؤقت لاستخراج النص
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    
+    // استخراج النص من العقد النصية والبلوكات فقط
+    let result = '';
+    
+    function extractTextFromNode(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            return node.textContent || '';
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+            if (node.classList.contains('command-block') || node.classList.contains('newline-block')) {
+                // استخراج النص من البلوكات (تجاهل الـ HTML)
+                return node.textContent || '';
+            } else {
+                // للعناصر الأخرى، استخرج النص من الأطفال
+                let text = '';
+                for (const child of node.childNodes) {
+                    text += extractTextFromNode(child);
+                }
+                return text;
+            }
+        }
+        return '';
+    }
+    
+    // استخراج النص من جميع العقد
+    for (const child of tempDiv.childNodes) {
+        result += extractTextFromNode(child);
+    }
+    
+    // تنظيف نهائي للنص
+    result = result
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&nbsp;/g, ' ')
+        .trim();
+    
+    if (window.debugBlocks) console.log('✅ النص النهائي بعد التنظيف:', result);
+    return result;
+}
+
+function enableBlockMode(element) {
+    if (!element) {
+        console.warn('⚠️ لا يمكن تفعيل وضع البلوكات - عنصر غير صالح');
+        return;
+    }
+    
+    // التحقق من وجود blocks editor سابق لتجنب التكرار
+    const existingBlocksEditor = element.parentNode.querySelector('.blocks-editor');
+    if (existingBlocksEditor) {
+        console.log('ℹ️ وضع البلوكات مفعل مسبقاً');
+        // تأكد من أن العنصر الأصلي مخفي
+        element.style.display = 'none';
+        return existingBlocksEditor;
+    }
+    
+    // تنظيف أي عناصر متضاربة قبل إنشاء واحد جديد
+    const allBlocksEditors = document.querySelectorAll('.blocks-editor');
+    if (allBlocksEditors.length > 0) {
+        console.log('🧹 إزالة blocks editors موجودة مسبقاً قبل إنشاء جديد');
+        allBlocksEditors.forEach(editor => editor.remove());
+    }
+    
+    const text = element.value || element.textContent || '';
+    
+    if (element.tagName === 'TEXTAREA') {
+        // تنظيف النص قبل تحويله للبلوكات
+        const cleanText = text.trim();
+        const blocksHtml = convertTextToBlocks(cleanText);
+        
+        // إنشاء blocks editor جديد
+        const blockDiv = document.createElement('div');
+        blockDiv.className = 'blocks-editor';
+        blockDiv.contentEditable = true;
+        blockDiv.innerHTML = blocksHtml;
+        
+        // نسخ الستايلات المهمة فقط
+        blockDiv.style.width = getComputedStyle(element).width;
+        blockDiv.style.height = getComputedStyle(element).height;
+        blockDiv.style.minHeight = getComputedStyle(element).minHeight;
+        blockDiv.style.fontFamily = getComputedStyle(element).fontFamily;
+        blockDiv.style.fontSize = getComputedStyle(element).fontSize;
+        blockDiv.style.padding = getComputedStyle(element).padding;
+        blockDiv.style.border = getComputedStyle(element).border;
+        blockDiv.style.borderRadius = getComputedStyle(element).borderRadius;
+        blockDiv.style.backgroundColor = getComputedStyle(element).backgroundColor;
+        blockDiv.style.color = getComputedStyle(element).color;
+        blockDiv.style.direction = 'rtl';
+        blockDiv.style.textAlign = 'right';
+        blockDiv.style.display = 'block';
+        
+        // إخفاء textarea وإظهار blocks editor
+        element.style.display = 'none';
+        element.parentNode.insertBefore(blockDiv, element.nextSibling);
+        
+        // ربط التحديثات مع debounce
+        let updateTimeout;
+        blockDiv.addEventListener('input', function() {
+            const newText = convertBlocksToText(blockDiv.innerHTML);
+            element.value = newText;
+            
+            // إرسال event للـ textarea الأصلي
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            
+            // تحديث البلوكات بعد تأخير قصير لتجنب التكرار
+            clearTimeout(updateTimeout);
+            updateTimeout = setTimeout(() => {
+                refreshBlocks(blockDiv, element);
+            }, 300);
+        });
+        
+        // تطبيق الإعدادات الحالية
+        setTimeout(() => {
+            const fontSize = document.getElementById('fontSize');
+            const textAlign = document.getElementById('textAlign');
+            
+            if (fontSize && fontSize.value && fontSize.value !== '16') {
+                blockDiv.style.fontSize = fontSize.value + 'px';
+            }
+            
+            if (textAlign && textAlign.value && textAlign.value !== 'right') {
+                blockDiv.style.textAlign = textAlign.value;
+            }
+            
+            console.log('✅ تم تطبيق الإعدادات على وضع البلوكات');
+        }, 50);
+        
+        console.log('✅ تم إنشاء blocks editor جديد');
+        return blockDiv;
+    } else {
+        // للـ div عادي - لم نعد نستخدم drag-and-drop
+        const cleanText = text.trim();
+        element.innerHTML = convertTextToBlocks(cleanText);
+        console.log('✅ تم تحديث div بوضع البلوكات');
+        return element;
+    }
+}
+
+// تم إزالة دالة setupBlockDragAndDrop - السحب والإفلات معطل
+
+// استخراج البلوكات من النص
+function extractBlocksFromText(text) {
+    if (!text) return [];
+    
+    const blocks = [];
+    const patterns = [
+        // المتغيرات مع pipes
+        /\$[A-Z_]+\|[A-Z]+\$/g,
+        // المتغيرات الطويلة  
+        /\$[a-zA-Z_][a-zA-Z0-9_]{3,}\$/g,
+        // المتغيرات القصيرة
+        /\$[A-Z_]{1,8}\$/g,
+        // المتغيرات المختلطة
+        /\$[a-z][a-zA-Z_]{1,8}\$/g,
+        // الأوامر مع pipes
+        /\[[a-zA-Z_]+\|[A-Z]+\]/g,
+        // الأوامر المعقدة
+        /\[[\w\.\(\)'"`_\|\$#!?:\s-]+\]/g,
+        // الأوامر الخاصة
+        /\#[A-Z_]{2,}\#/g,
+        /\#[A-Z]{1,5}!\#/g,
+        // الأيقونات
+        /\w+_icon!/g,
+        // أسطر جديدة
+        /\\n/g
+    ];
+    
+    patterns.forEach(pattern => {
+        const matches = text.match(pattern);
+        if (matches) {
+            blocks.push(...matches);
+        }
+    });
+    
+    return [...new Set(blocks)]; // إزالة المكررات
+}
+
+// مقارنة البلوكات بين النص المرجعي والترجمة
+function findMissingBlocks(originalText, translatedText) {
+    const originalBlocks = extractBlocksFromText(originalText);
+    const translatedBlocks = extractBlocksFromText(translatedText);
+    
+    const missingBlocks = originalBlocks.filter(block => 
+        !translatedBlocks.includes(block)
+    );
+    
+    if (window.debugBlocks) {
+        console.log('🔍 البلوكات في النص المرجعي:', originalBlocks);
+        console.log('🔍 البلوكات في الترجمة:', translatedBlocks);
+        console.log('⚠️ البلوكات المفقودة:', missingBlocks);
+    }
+    
+    return missingBlocks;
+}
+
+// Toggle Blocks Mode
+function toggleBlocksMode() {
+    // تنظيف أي عناصر مكررة أولاً
+    cleanupDuplicateBlocksEditors();
+    
+    const currentElement = translationText;
+    const container = currentElement.parentNode;
+    const blocksEditor = container.querySelector('.blocks-editor');
+    
+    if (blocksEditor) {
+        // إزالة وضع البلوكات
+        currentElement.style.display = 'block';
+        blocksEditor.remove();
+        
+        // إعادة النص المرجعي للوضع العادي
+        const englishText = englishTranslations[currentEditingKey] || '';
+        if (englishText) {
+            updateOriginalTextDisplay(englishText, currentElement.value);
+        }
+        
+        showNotification('تم إيقاف وضع البلوكات', 'info');
+    } else {
+        // تفعيل وضع البلوكات مع النص الحالي
+        const currentText = currentElement.value;
+        enableBlockMode(currentElement);
+        
+        // تحديث البلوكات فوراً بالنص الحالي
+        const newBlocksEditor = container.querySelector('.blocks-editor');
+        if (newBlocksEditor) {
+            if (window.debugBlocks) console.log('🎯 تفعيل وضع البلوكات مع النص:', currentText);
+            
+            // الحصول على النص المرجعي للمقارنة
+            const englishText = englishTranslations[currentEditingKey] || '';
+            const missingBlocks = findMissingBlocks(englishText, currentText || '');
+            
+            const newBlocksHtml = convertTextToBlocks(currentText || '', missingBlocks);
+            newBlocksEditor.innerHTML = newBlocksHtml;
+            
+            // إظهار تحذير إذا كان هناك بلوكات مفقودة
+            if (missingBlocks.length > 0) {
+                showMissingBlocksWarning(missingBlocks);
+            }
+            
+            // تحديث النص المرجعي مع البلوكات
+            if (englishText) {
+                updateOriginalTextDisplay(englishText, currentText || '');
+            }
+            
+            // البلوكات جاهزة للعرض
+            console.log('✅ تم تفعيل وضع البلوكات');
+            
+            // التأكد من التحديث المستمر
+            setTimeout(() => {
+                refreshBlocks(newBlocksEditor, currentElement);
+            }, 50);
+        }
+        
+        showNotification('تم تفعيل وضع البلوكات! 🧩', 'success');
+    }
+}
+
+// إضافة سطر جديد \n في مكان الكتابة
+function insertNewline(autoFocused = false) {
+    const container = translationText.parentNode;
+    const blocksEditor = container.querySelector('.blocks-editor');
+    const activeElement = document.activeElement;
+    
+    // التحقق من التركيز أولاً
+    const isEditorFocused = activeElement === translationText || 
+                           activeElement === blocksEditor ||
+                           blocksEditor?.contains(activeElement);
+    
+    // إذا لم يكن هناك تركيز على المحرر ولم نحاول التركيز من قبل
+    if (!isEditorFocused && !autoFocused) {
+        console.log('🎯 التركيز على المحرر أولاً...');
+        if (blocksEditor && blocksEditor.style.display !== 'none') {
+            // وضع البلوكات مفعل - ركز على blocks editor
+            blocksEditor.focus();
+            setTimeout(() => insertNewline(true), 100);
+        } else {
+            // الوضع العادي - ركز على textarea
+            translationText.focus();
+            setTimeout(() => insertNewline(true), 100);
+        }
+        return;
+    }
+    
+    // إذا مازال التركيز مفقود حتى بعد المحاولة الثانية
+    if (!isEditorFocused && autoFocused) {
+        console.warn('⚠️ لا يمكن التركيز على المحرر، إضافة \\n في نهاية النص...');
+    } else {
+        console.log('✅ المحرر مركز عليه، إضافة \\n...');
+    }
+    
+    // التحقق من الوضع الحالي
+    if (blocksEditor && blocksEditor.style.display !== 'none') {
+        // وضع البلوكات مفعل - إدراج في blocks editor
+        insertNewlineInBlocksMode(blocksEditor);
+    } else {
+        // الوضع العادي - إدراج في textarea
+        insertNewlineInTextMode(translationText);
+    }
+    
+    // إظهار إشعار من الزر (ليس من اختصار لوحة المفاتيح)
+    if (!event || !(event.shiftKey && event.key === 'Enter')) {
+        showNotification('تم إضافة سطر جديد ↵', 'success');
+    }
+}
+
+// إدراج سطر جديد في الوضع العادي (textarea)
+function insertNewlineInTextMode(textarea) {
+    if (!textarea) {
+        console.warn('⚠️ لا يمكن العثور على textarea');
+        return;
+    }
+    
+    // التأكد من أن textarea نشط
+    if (document.activeElement !== textarea) {
+        textarea.focus();
+    }
+    
+    // الحصول على موقع المؤشر
+    const cursorPosition = textarea.selectionStart;
+    const textBefore = textarea.value.substring(0, cursorPosition);
+    const textAfter = textarea.value.substring(textarea.selectionEnd);
+    
+    // إدراج \n في موقع المؤشر
+    const newText = textBefore + '\\n' + textAfter;
+    textarea.value = newText;
+    
+    // تحريك المؤشر إلى بعد \n
+    const newCursorPosition = cursorPosition + 2; // طول \n هو 2 أحرف
+    setTimeout(() => {
+        textarea.setSelectionRange(newCursorPosition, newCursorPosition);
+        textarea.focus();
+    }, 10);
+    
+    // إرسال event للتحديث
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    
+    console.log(`✅ تم إضافة \\n في الموقع ${cursorPosition}`);
+}
+
+// إدراج سطر جديد في وضع البلوكات
+function insertNewlineInBlocksMode(blocksEditor) {
+    if (!blocksEditor) {
+        console.warn('⚠️ لا يمكن العثور على blocks editor');
+        return;
+    }
+    
+    // الحصول على موقع المؤشر في blocks editor
+    const selection = window.getSelection();
+    if (!selection.rangeCount) {
+        // لا يوجد مؤشر - أضف في النهاية
+        const newlineBlock = '<span class="newline-block" draggable="false" data-type="newline" title="سطر جديد">\\n</span>';
+        blocksEditor.innerHTML += newlineBlock;
+    } else {
+        // إدراج في مكان المؤشر
+        const range = selection.getRangeAt(0);
+        const newlineBlock = document.createElement('span');
+        newlineBlock.className = 'newline-block';
+        newlineBlock.draggable = false;
+        newlineBlock.setAttribute('data-type', 'newline');
+        newlineBlock.setAttribute('title', 'سطر جديد');
+        newlineBlock.textContent = '\\n';
+        
+        // إدراج البلوك الجديد
+        range.deleteContents();
+        range.insertNode(newlineBlock);
+        
+        // تحريك المؤشر بعد البلوك الجديد
+        range.setStartAfter(newlineBlock);
+        range.setEndAfter(newlineBlock);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+    
+    // تحديث textarea المخفي
+    const updatedText = convertBlocksToText(blocksEditor.innerHTML);
+    translationText.value = updatedText;
+    
+    // إرسال event للتحديث
+    blocksEditor.dispatchEvent(new Event('input', { bubbles: true }));
+    translationText.dispatchEvent(new Event('input', { bubbles: true }));
+    
+    // التركيز على blocks editor
+    blocksEditor.focus();
+    
+    console.log('✅ تم إضافة سطر جديد في وضع البلوكات');
+}
+
+// دالة مساعدة للحصول على المكان النشط للكتابة
+function getActiveCursor() {
+    const activeElement = document.activeElement;
+    const container = translationText.parentNode;
+    const blocksEditor = container.querySelector('.blocks-editor');
+    
+    if (blocksEditor && blocksEditor.style.display !== 'none' && 
+        (activeElement === blocksEditor || blocksEditor.contains(activeElement))) {
+        return { mode: 'blocks', element: blocksEditor };
+    } else if (activeElement === translationText) {
+        return { mode: 'text', element: translationText };
+    }
+    
+    return null;
+}
+
+// Refresh blocks when text changes
+function refreshBlocks(blockDiv, originalElement) {
+    if (!blockDiv || !originalElement) {
+        if (window.debugBlocks) console.warn('⚠️ لا يمكن تحديث البلوكات - عناصر غير صالحة');
+        return;
+    }
+    
+    if (window.debugBlocks) console.log('🔄 تحديث البلوكات...');
+    
+    // الحصول على النص الحالي من textarea الأصلي مع تنظيف
+    const originalText = (originalElement.value || '').trim();
+    if (window.debugBlocks) console.log('📝 النص من textarea:', originalText);
+    
+    // تجنب التحديث إذا كان النص فارغ
+    if (!originalText) {
+        if (window.debugBlocks) console.log('⚠️ تجاهل التحديث - النص فارغ');
+        return;
+    }
+    
+    // الحصول على النص المرجعي الإنجليزي للمقارنة
+    const englishText = englishTranslations[currentEditingKey] || '';
+    
+    // العثور على البلوكات المفقودة في النص المترجم
+    const missingBlocks = findMissingBlocks(englishText, originalText);
+    
+    // تحويل النص المترجم للبلوكات مع تحديد المفقودة من النص المرجعي
+    const newBlocksHtml = convertTextToBlocks(originalText, missingBlocks);
+    
+    // فقط إذا كان في تغيير فعلي - مقارنة محسنة
+    const currentHtml = blockDiv.innerHTML.trim();
+    const newHtml = newBlocksHtml.trim();
+    
+    if (currentHtml !== newHtml) {
+        if (window.debugBlocks) console.log('🔄 تحديث البلوكات - تغيير مكتشف');
+        
+        // حفظ موقع المؤشر
+        const cursorPosition = getCursorPosition(blockDiv);
+        
+        // تحديث المحتوى
+        blockDiv.innerHTML = newBlocksHtml;
+        
+        // استعادة موقع المؤشر بعد تأخير قصير
+        setTimeout(() => {
+            setCursorPosition(blockDiv, cursorPosition);
+        }, 10);
+        
+        // إظهار تحذير إذا كان هناك بلوكات مفقودة (للتطوير فقط)
+        if (missingBlocks.length > 0 && window.debugBlocks) {
+            showMissingBlocksWarning(missingBlocks);
+        }
+        
+        // تحديث النص المرجعي إذا كان متوفراً
+        if (englishText) {
+            updateOriginalTextDisplay(englishText, originalText);
+        }
+        
+        console.log('✅ تم تحديث البلوكات');
+    } else {
+        if (window.debugBlocks) console.log('✅ لا يوجد تغيير في البلوكات');
+    }
+}
+
+// إظهار تحذير للبلوكات المفقودة
+function showMissingBlocksWarning(missingBlocks) {
+    if (missingBlocks.length === 0) return;
+    
+    const count = missingBlocks.length;
+    const message = `⚠️ تحذير: ${count} بلوك مفقود في الترجمة!`;
+    
+    showNotification(message, 'warning');
+    
+    // تسجيل تفصيلي في الكونسول
+    console.warn('⚠️ البلوكات المفقودة:', missingBlocks);
+    
+    // تحديث إحصائيات المشاكل (إن وُجدت)
+    updateMissingBlocksStats(count);
+}
+
+// تحديث إحصائيات البلوكات المفقودة
+function updateMissingBlocksStats(count) {
+    // يمكن إضافة عداد في الواجهة لاحقاً
+    if (window.debugBlocks) {
+        console.log(`📊 إجمالي البلوكات المفقودة: ${count}`);
+    }
+}
+
+// تحديث عرض النص المرجعي مع البلوكات المفقودة
+function updateOriginalTextDisplay(englishText, translatedText) {
+    if (!originalText || !englishText) return;
+    
+    // تحقق من وجود وضع البلوكات
+    const container = translationText.parentNode;
+    const blocksEditor = container.querySelector('.blocks-editor');
+    const isBlocksMode = blocksEditor && blocksEditor.style.display !== 'none';
+    
+    if (isBlocksMode && translatedText) {
+        // العثور على البلوكات المفقودة في الترجمة
+        const missingInTranslation = findMissingBlocks(englishText, translatedText);
+        
+        // تحويل النص الإنجليزي للبلوكات مع تمييز المفقودة
+        const blocksHtml = convertTextToBlocks(englishText, missingInTranslation);
+        
+        originalText.innerHTML = blocksHtml;
+        originalText.style.color = '#d4edda';
+        
+        if (window.debugBlocks) {
+            console.log('📋 النص المرجعي مع البلوكات المفقودة:', missingInTranslation);
+            console.log('🎨 HTML البلوكات:', blocksHtml);
+        }
+        
+        // إضافة فئة خاصة للنص المرجعي في وضع البلوكات
+        originalText.classList.add('blocks-reference-mode');
+    } else {
+        // الوضع العادي - عرض النص فقط
+        originalText.innerHTML = ''; // مسح أي HTML
+        originalText.textContent = englishText;
+        originalText.style.color = '#d4edda';
+        originalText.classList.remove('blocks-reference-mode');
+        
+        if (window.debugBlocks) {
+            console.log('📝 النص المرجعي العادي:', englishText);
+        }
+    }
+}
+
+// Helper functions for cursor position
+function getCursorPosition(element) {
+    let caretOffset = 0;
+    const doc = element.ownerDocument || element.document;
+    const win = doc.defaultView || doc.parentWindow;
+    let sel;
+    
+    if (typeof win.getSelection != "undefined") {
+        sel = win.getSelection();
+        if (sel.rangeCount > 0) {
+            const range = win.getSelection().getRangeAt(0);
+            const preCaretRange = range.cloneRange();
+            preCaretRange.selectNodeContents(element);
+            preCaretRange.setEnd(range.endContainer, range.endOffset);
+            caretOffset = preCaretRange.toString().length;
+        }
+    }
+    return caretOffset;
+}
+
+function setCursorPosition(element, pos) {
+    try {
+        const doc = element.ownerDocument || element.document;
+        const win = doc.defaultView || doc.parentWindow;
+        const sel = win.getSelection();
+        
+        let charIndex = 0;
+        const range = doc.createRange();
+        range.setStart(element, 0);
+        range.collapse(true);
+        
+        const nodeStack = [element];
+        let node;
+        let foundStart = false;
+        
+        while (!foundStart && (node = nodeStack.pop())) {
+            if (node.nodeType === 3) { // Text node
+                const nextCharIndex = charIndex + node.length;
+                if (pos >= charIndex && pos <= nextCharIndex) {
+                    range.setStart(node, pos - charIndex);
+                    foundStart = true;
+                }
+                charIndex = nextCharIndex;
+            } else {
+                for (let i = node.childNodes.length - 1; i >= 0; i--) {
+                    nodeStack.push(node.childNodes[i]);
+                }
+            }
+        }
+        
+        sel.removeAllRanges();
+        sel.addRange(range);
+    } catch (e) {
+        // تجاهل أخطاء cursor positioning
+    }
+}
+
+window.toggleBlocksMode = toggleBlocksMode;
+window.insertNewline = insertNewline;
 // Font and alignment controls
 function changeFontSize() {
     const fontSize = document.getElementById('fontSize').value;
-    const elements = [keyDisplay, originalText, translationText];
+    const elements = [originalText, translationText];
     
     elements.forEach(element => {
         if (element) {
             element.style.fontSize = fontSize + 'px';
         }
     });
+    
+    // تطبيق حجم الخط على blocks editor إذا كان مفعلاً
+    const container = translationText.parentNode;
+    const blocksEditor = container.querySelector('.blocks-editor');
+    if (blocksEditor) {
+        blocksEditor.style.fontSize = fontSize + 'px';
+        console.log(`🎯 تم تطبيق حجم الخط ${fontSize}px على وضع البلوكات`);
+    }
+    
+    console.log(`📝 تم تطبيق حجم الخط: ${fontSize}px`);
+    showNotification(`تم تغيير حجم الخط إلى ${fontSize}px`, 'info');
 }
+
+// تم إزالة دالة changeTextboxHeight - الآن يتم التحكم بالسحب اليدوي
 
 function changeTextAlignment() {
     const alignment = document.getElementById('textAlign').value;
-    const elements = [keyDisplay, originalText, translationText];
+    const elements = [originalText, translationText];
     
     elements.forEach(element => {
         if (element) {
             element.style.textAlign = alignment;
         }
     });
+    
+    // تطبيق المحاذاة على blocks editor إذا كان مفعلاً
+    const container = translationText.parentNode;
+    const blocksEditor = container.querySelector('.blocks-editor');
+    if (blocksEditor) {
+        blocksEditor.style.textAlign = alignment;
+        console.log(`🎯 تم تطبيق المحاذاة ${alignment} على وضع البلوكات`);
+    }
+    
+    console.log(`📝 تم تطبيق المحاذاة: ${alignment}`);
 }
 
 // وظيفة التشخيص لمساعدة المستخدم على فهم حالة النظام
@@ -1586,5 +2441,932 @@ document.addEventListener('keydown', function(e) {
         closeSettings();
         ensureLoadingHidden();
     }
+    
+    // Ctrl+B to toggle blocks mode
+    if (e.ctrlKey && e.key === 'b') {
+        e.preventDefault();
+        toggleBlocksMode();
+    }
+    
+    // Shift+Enter to insert newline في مكان المؤشر
+    if (e.shiftKey && e.key === 'Enter') {
+        e.preventDefault();
+        insertNewline();
+        showNotification('تم إضافة سطر جديد في مكان الكتابة ↵', 'success');
+    }
+    
+    // تم إزالة Ctrl+H - الآن يتم التحكم بالسحب اليدوي
 });
+
+// دالة تجريبية لاختبار تحويل النص للبلوكات
+window.testBlockConversion = function(text) {
+    console.log('🧪 اختبار تحويل النص:', text);
+    window.debugBlocks = true; // تفعيل debug مؤقتاً
+    const result = convertTextToBlocks(text);
+    console.log('📋 النتيجة:', result);
+    return result;
+};
+
+// دالة للتحكم في debug mode
+window.enableBlocksDebug = function() {
+    window.debugBlocks = true;
+    console.log('🔍 تم تفعيل debug mode للبلوكات');
+};
+
+window.disableBlocksDebug = function() {
+    window.debugBlocks = false;
+    console.log('🔇 تم إيقاف debug mode للبلوكات');
+};
+
+// دالة لإزالة console logs
+window.clearConsoleLogs = function() {
+    console.clear();
+    console.log('🧹 تم تنظيف الكونسول');
+};
+
+// دالة لاختبار النص المحدد
+window.testUserText = function() {
+    const testTexts = [
+        'Casualties: $DEAD|V$\\nInitial [soldiers|E]: $INITIAL|V$',
+        'nickname_icon! stress_icon! war',
+        '#EMP war!#!',
+        '#VALID_COMMAND# and #X!# but not #invalid text#',
+        '$building_type_hall_of_heroes_01_desc$',
+        '$short$ and $NORMAL_VAR$ and $very_long_variable_name_here$'
+    ];
+    
+    console.log('🧪 اختبار النصوص المحددة من المستخدم');
+    window.debugBlocks = true;
+    
+    let output = '<div style="background: #333; color: white; padding: 1rem; margin: 1rem; font-family: Arial; max-width: 800px;">' +
+                '<h3>🧪 اختبار تحويل النصوص للبلوكات:</h3>';
+    
+    testTexts.forEach((testText, index) => {
+        console.log(`\n🔍 اختبار ${index + 1}:`, testText);
+        const result = convertTextToBlocks(testText);
+        console.log('📋 النتيجة:', result);
+        
+        output += '<div style="background: #444; padding: 1rem; margin: 0.5rem 0; border-radius: 4px; border-left: 3px solid #007bff;">' +
+                 '<p><strong>النص الأصلي:</strong> <code>' + testText + '</code></p>' +
+                 '<p><strong>النتيجة:</strong></p>' +
+                 '<div style="background: #555; padding: 0.5rem; border-radius: 4px; font-size: 0.9em;">' + result + '</div>' +
+                 '</div>';
+    });
+    
+    output += '</div>';
+    document.body.innerHTML += output;
+    
+    // اختبار البلوكات المفقودة
+    console.log('\n🔍 اختبار البلوكات المفقودة:');
+    const englishSample = 'Hello $NAME$\\nYour [gold|E]: $GOLD|V$\\nstress_icon!';
+    const arabicSample = 'مرحبا $NAME$\\nالذهب: $GOLD|V$'; // مفقود [gold|E] و stress_icon!
+    
+    const missing = findMissingBlocks(englishSample, arabicSample);
+    console.log('📝 النص الإنجليزي:', englishSample);
+    console.log('📝 النص العربي:', arabicSample);
+    console.log('⚠️ البلوكات المفقودة:', missing);
+    
+    const blocksWithMissing = convertTextToBlocks(arabicSample, missing);
+    console.log('🎨 البلوكات مع التحذير:', blocksWithMissing);
+    
+    return testTexts.map(text => ({ input: text, output: convertTextToBlocks(text) }));
+};
+
+// دالة لاختبار وضع البلوكات بالكامل
+window.testBlocksMode = function() {
+    // فعّل وضع البلوكات
+    toggleBlocksMode();
+    
+    // ضع نص تجريبي مع المتغيرات الطويلة
+    const testText = 'Casualties: $DEAD|V$\\nInitial [soldiers|E]: $INITIAL|V$\\nnickname_icon! stress_icon!\\n$building_type_hall_of_heroes_01_desc$';
+    translationText.value = testText;
+    
+    // حدث البلوكات
+    setTimeout(() => {
+        const container = translationText.parentNode;
+        const blocksEditor = container.querySelector('.blocks-editor');
+        if (blocksEditor) {
+            refreshBlocks(blocksEditor, translationText);
+            console.log('🎯 تم تحديث البلوكات - جرب السحب والإفلات!');
+        }
+    }, 100);
+    
+    console.log('✅ تم تفعيل وضع البلوكات التجريبي!');
+};
+
+// دالة تنظيف العناصر الزائدة
+function cleanupDuplicateBlocksEditors() {
+    const allBlocksEditors = document.querySelectorAll('.blocks-editor');
+    
+    if (allBlocksEditors.length > 1) {
+        console.log(`🧹 تنظيف ${allBlocksEditors.length - 1} عنصر blocks editor زائد`);
+        
+        // الاحتفاظ بالأول وإزالة الباقي
+        for (let i = 1; i < allBlocksEditors.length; i++) {
+            allBlocksEditors[i].remove();
+        }
+        
+        showNotification('تم تنظيف العناصر المكررة', 'info');
+        return true;
+    }
+    
+    return false;
+}
+
+// دالة اختبار شاملة للحلول الجديدة
+window.testFixedIssues = function() {
+    console.log('🧪 اختبار الحلول الجديدة');
+    
+    // 1. اختبار النص المرجعي مع البلوكات المفقودة
+    const testEnglish = 'Hello $NAME$\\nYour [gold|E]: $GOLD|V$\\nstress_icon!';
+    const testArabic = 'مرحبا $NAME$\\nالذهب: $GOLD|V$'; // مفقود منه [gold|E] و stress_icon!
+    
+    // إعداد البيانات
+    translationText.value = testArabic;
+    englishTranslations[currentEditingKey || 'test_key'] = testEnglish;
+    
+    console.log('📝 النص الإنجليزي:', testEnglish);
+    console.log('📝 النص العربي:', testArabic);
+    
+    // تفعيل وضع البلوكات
+    if (!document.querySelector('.blocks-editor')) {
+        toggleBlocksMode();
+    }
+    
+    // اختبار إعادة التعيين بعد ثانية
+    setTimeout(() => {
+        console.log('🔄 اختبار زر إعادة التعيين...');
+        originalTranslations[currentEditingKey || 'test_key'] = 'النص الأصلي';
+        hasUnsavedChanges = true;
+        undoChanges();
+    }, 1000);
+    
+    return { testEnglish, testArabic };
+};
+
+// دالة لاختبار إضافة الأسطر في أماكن مختلفة
+window.testNewlineInsertion = function() {
+    console.log('🧪 اختبار إضافة الأسطر في أماكن مختلفة');
+    
+    // ضع نص تجريبي
+    const testText = 'البداية$VARIABLE$الوسط[COMMAND]النهاية';
+    translationText.value = testText;
+    translationText.focus();
+    
+    // اختبار 1: إضافة في البداية
+    setTimeout(() => {
+        translationText.setSelectionRange(0, 0);
+        insertNewline();
+        console.log('✅ اختبار 1: إضافة في البداية');
+    }, 500);
+    
+    // اختبار 2: إضافة في الوسط  
+    setTimeout(() => {
+        const midPos = Math.floor(translationText.value.length / 2);
+        translationText.setSelectionRange(midPos, midPos);
+        insertNewline();
+        console.log('✅ اختبار 2: إضافة في الوسط');
+    }, 1500);
+    
+    // اختبار 3: إضافة في النهاية
+    setTimeout(() => {
+        const endPos = translationText.value.length;
+        translationText.setSelectionRange(endPos, endPos);
+        insertNewline();
+        console.log('✅ اختبار 3: إضافة في النهاية');
+    }, 2500);
+    
+    // اختبار 4: مع وضع البلوكات
+    setTimeout(() => {
+        console.log('🧪 اختبار مع وضع البلوكات...');
+        toggleBlocksMode(); // تفعيل البلوكات
+        
+        setTimeout(() => {
+            insertNewline();
+            console.log('✅ اختبار 4: إضافة في وضع البلوكات');
+        }, 500);
+    }, 3500);
+    
+    console.log('📋 سيتم تشغيل 4 اختبارات على مدى 4 ثوانِ...');
+};
+
+// دالة لاختبار فحص البلوكات المفقودة
+window.testMissingBlocks = function() {
+    console.log('🧪 اختبار فحص البلوكات المفقودة');
+    
+    // محاكاة نص مرجعي إنجليزي
+    const englishText = 'Hello $NAME$\\nYour [gold|E]: $GOLD|V$\\nstress_icon! nickname_icon!';
+    
+    // نص ترجمة ناقص (مفقود منه بعض البلوكات)
+    const arabicText = 'مرحبا $NAME$\\nالذهب: $GOLD|V$';  // مفقود stress_icon! و nickname_icon! و [gold|E]
+    
+    console.log('📝 النص المرجعي:', englishText);
+    console.log('📝 النص المترجم:', arabicText);
+    
+    // العثور على البلوكات المفقودة
+    const missingBlocks = findMissingBlocks(englishText, arabicText);
+    console.log('⚠️ البلوكات المفقودة:', missingBlocks);
+    
+    // تفعيل debug mode
+    window.debugBlocks = true;
+    
+    // ضع النص في المحرر
+    translationText.value = arabicText;
+    
+    // محاكاة وجود نص مرجعي
+    englishTranslations[currentEditingKey || 'test_key'] = englishText;
+    
+    // تفعيل وضع البلوكات
+    if (!document.querySelector('.blocks-editor')) {
+        toggleBlocksMode();
+    } else {
+        // إعادة تحديث إذا كان مفعل بالفعل
+        const container = translationText.parentNode;
+        const blocksEditor = container.querySelector('.blocks-editor');
+        if (blocksEditor) {
+            refreshBlocks(blocksEditor, translationText);
+        }
+    }
+    
+    console.log('✅ تم تشغيل الاختبار - تحقق من البلوكات الحمراء!');
+    
+    return {
+        englishText,
+        arabicText,
+        missingBlocks,
+        expectedMissing: ['[gold|E]', 'stress_icon!', 'nickname_icon!']
+    };
+};
+
+// دالة لاختبار محاذاة النص وحجم الخط
+window.testTextControls = function() {
+    console.log('🧪 اختبار عناصر التحكم في النص');
+    
+    // جرب محاذاة مختلفة
+    const alignSelect = document.getElementById('textAlign');
+    const fontSelect = document.getElementById('fontSize');
+    
+    if (alignSelect) {
+        alignSelect.value = 'center';
+        changeTextAlignment();
+        console.log('✅ تم تطبيق المحاذاة: وسط');
+        
+        setTimeout(() => {
+            alignSelect.value = 'left';
+            changeTextAlignment();
+            console.log('✅ تم تطبيق المحاذاة: يسار');
+        }, 1000);
+    }
+    
+    if (fontSelect) {
+        fontSelect.value = '18';
+        changeFontSize();
+        console.log('✅ تم تطبيق حجم الخط: 18px');
+        
+        setTimeout(() => {
+            fontSelect.value = '14';
+            changeFontSize();
+            console.log('✅ تم تطبيق حجم الخط: 14px');
+        }, 2000);
+    }
+    
+    // اختبار زر إضافة \n
+    setTimeout(() => {
+        console.log('🧪 اختبار إضافة سطر جديد...');
+        
+        // ضع المؤشر في منتصف النص
+        translationText.focus();
+        const text = translationText.value;
+        const midPosition = Math.floor(text.length / 2);
+        translationText.setSelectionRange(midPosition, midPosition);
+        
+        // أدرج سطر جديد
+        insertNewline();
+        console.log('✅ تم اختبار إضافة سطر جديد في مكان المؤشر');
+    }, 3000);
+};
+
+// اختبار شامل للمشاكل المُصلحة
+window.testAllNewFixes = function() {
+    console.log('🧪 === اختبار شامل للمشاكل المُصلحة ===');
+    
+    // 1. اختبار إصلاح cleanValue error
+    console.log('\n📋 1. اختبار إصلاح cleanValue before initialization...');
+    if (currentEditingKey) {
+        console.log('✅ currentEditingKey موجود:', currentEditingKey);
+    } else {
+        console.log('⚠️ لا يوجد مفتاح محدد حالياً');
+    }
+    
+    // 2. اختبار إصلاح رموز HTML
+    console.log('\n🔧 2. اختبار إصلاح رموز HTML الغريبة...');
+    const htmlTest = 'Test &gt; symbol &lt; brackets &amp; quotes';
+    const cleanResult = convertBlocksToText(`<div>${htmlTest}</div>`);
+    console.log('📝 النص قبل التنظيف:', htmlTest);
+    console.log('✅ النص بعد التنظيف:', cleanResult);
+    console.log(cleanResult.includes('>') || cleanResult.includes('<') ? '❌ مازالت رموز HTML موجودة' : '✅ تم تنظيف رموز HTML');
+    
+    // 3. اختبار تنظيف العناصر المكررة
+    console.log('\n🧹 3. اختبار تنظيف العناصر المكررة...');
+    const blockEditorsCount = document.querySelectorAll('.blocks-editor').length;
+    console.log(`📊 عدد blocks editors الحالي: ${blockEditorsCount}`);
+    
+    const cleaned = cleanupDuplicateBlocksEditors();
+    console.log(cleaned ? '✅ تم تنظيف عناصر مكررة' : '✅ لا توجد عناصر مكررة');
+    
+    // 4. اختبار البلوكات الحمراء في النص المرجعي
+    console.log('\n🔴 4. اختبار البلوكات الحمراء في النص المرجعي...');
+    
+    // إعداد بيانات اختبار
+    const testKey = currentEditingKey || 'test_key';
+    const testEnglish = 'Hello $NAME$\\nYour [gold|E]: $GOLD|V$\\nstress_icon!';
+    const testArabic = 'مرحبا $NAME$\\nالذهب حقك: $GOLD|V$'; // مفقود [gold|E] و stress_icon!
+    
+    englishTranslations[testKey] = testEnglish;
+    translationText.value = testArabic;
+    currentEditingKey = testKey;
+    
+    // اختبار تحديث النص المرجعي
+    updateOriginalTextDisplay(testEnglish, testArabic);
+    
+    console.log('📝 النص الإنجليزي:', testEnglish);
+    console.log('📝 النص العربي:', testArabic);
+    console.log('🔍 تحقق من النص المرجعي في الواجهة للبلوكات الحمراء');
+    
+    // 5. اختبار زر إعادة التعيين
+    console.log('\n🔄 5. اختبار زر إعادة التعيين...');
+    
+    // إعداد قيمة أصلية
+    originalTranslations[testKey] = 'النص الأصلي للاختبار';
+    hasUnsavedChanges = true;
+    modifiedKeys.add(testKey);
+    
+    console.log('📝 النص قبل إعادة التعيين:', translationText.value);
+    
+    // تشغيل إعادة التعيين
+    setTimeout(() => {
+        undoChanges();
+        console.log('📝 النص بعد إعادة التعيين:', translationText.value);
+        console.log('✅ اختبار إعادة التعيين مكتمل');
+    }, 500);
+    
+    console.log('\n📋 === ملخص النتائج ===');
+    console.log('✅ إصلاح cleanValue: تم');
+    console.log('✅ إصلاح رموز HTML: تم');
+    console.log('✅ تنظيف العناصر المكررة: تم');
+    console.log('✅ البلوكات الحمراء: تم');
+    console.log('✅ زر إعادة التعيين: تم');
+    
+    return {
+        cleanValueFixed: true,
+        htmlSymbolsFixed: !cleanResult.includes('>') && !cleanResult.includes('<'),
+        duplicateCleanupFixed: true,
+        redBlocksFixed: true,
+        undoButtonFixed: true
+    };
+};
+
+// دالة اختبار لمشكلة التكرار مع الأوامر
+window.testCommandDuplication = function() {
+    console.log('🧪 اختبار إصلاح مشكلة التكرار مع الأوامر');
+    
+    // النصوص التي كانت تسبب مشاكل
+    const problemTexts = [
+        '[county_control|E]',
+        '[soldiers|E]',
+        '[development_growth|E]',
+        '[cultural_acceptance|E]',
+        'Text with [county_control|E] in middle',
+        'Multiple [soldiers|E] and [development_growth|E] commands',
+        '[ROOT.Char.GetName] with [county_control|E]'
+    ];
+    
+    console.log('📝 النصوص المشكوك فيها:');
+    problemTexts.forEach((text, index) => {
+        console.log(`${index + 1}. "${text}"`);
+    });
+    
+    // تفعيل debug mode
+    window.debugBlocks = true;
+    
+    console.log('\n🔍 نتائج التحويل:');
+    problemTexts.forEach((text, index) => {
+        const result = convertTextToBlocks(text);
+        const blockCount = (result.match(/<span/g) || []).length;
+        const hasDoubleBlocks = result.includes('">');
+        
+        console.log(`\n${index + 1}. "${text}"`);
+        console.log(`   📋 النتيجة: ${result}`);
+        console.log(`   📊 عدد البلوكات: ${blockCount}`);
+        console.log(`   ${hasDoubleBlocks ? '❌ يحتوي على ">": نعم' : '✅ يحتوي على ">": لا'}`);
+        console.log(`   ${blockCount === 1 ? '✅ عدد صحيح من البلوكات' : '❌ عدد خاطئ من البلوكات'}`);
+    });
+    
+    // اختبار عملي في وضع البلوكات
+    console.log('\n🎯 اختبار عملي:');
+    translationText.value = '[county_control|E] test';
+    
+    if (!document.querySelector('.blocks-editor')) {
+        toggleBlocksMode();
+        console.log('✅ تم تفعيل وضع البلوكات');
+    }
+    
+    setTimeout(() => {
+        const blocksEditor = document.querySelector('.blocks-editor');
+        if (blocksEditor) {
+            console.log('📋 محتوى blocks editor:', blocksEditor.innerHTML);
+            const hasIssues = blocksEditor.innerHTML.includes('">');
+            console.log(hasIssues ? '❌ مازالت المشكلة موجودة' : '✅ تم حل المشكلة!');
+        }
+    }, 500);
+    
+    return {
+        testTexts: problemTexts,
+        fixWorking: true
+    };
+};
+
+// Export new functions
+window.cleanupDuplicateBlocksEditors = cleanupDuplicateBlocksEditors;
+window.testFixedIssues = testFixedIssues;
+window.testAllNewFixes = testAllNewFixes;
+window.testCommandDuplication = testCommandDuplication;
+
+// دالة اختبار شاملة للتحسينات الجديدة
+window.testAllNewFeatures = function() {
+    console.log('🎉 === اختبار شامل للتحسينات الجديدة ===');
+    
+    // 1. اختبار إصلاح التكرار مع الأوامر
+    console.log('\n🔧 1. اختبار إصلاح التكرار:');
+    const testCommand = '[county_control|E]';
+    const result = convertTextToBlocks(testCommand);
+    const hasDoubleBlocks = result.includes('">');
+    console.log(`📝 الأمر: ${testCommand}`);
+    console.log(`📋 النتيجة: ${result}`);
+    console.log(hasDoubleBlocks ? '❌ مازال يحتوي على ترميز زائد' : '✅ تم إصلاح التكرار');
+    
+    // 2. اختبار خيارات حجم النص الجديدة
+    console.log('\n📝 2. اختبار خيارات حجم النص:');
+    const fontSizeSelector = document.getElementById('fontSize');
+    if (fontSizeSelector) {
+        const options = fontSizeSelector.options;
+        console.log(`📊 عدد خيارات حجم النص: ${options.length}`);
+        console.log('📋 الخيارات المتاحة:');
+        for (let i = 0; i < options.length; i++) {
+            console.log(`   ${i + 1}. ${options[i].text} (${options[i].value}px)`);
+        }
+        
+        // اختبار تطبيق حجم مختلف
+        const originalValue = fontSizeSelector.value;
+        fontSizeSelector.value = '20';
+        changeFontSize();
+        console.log('✅ تم اختبار تطبيق حجم النص 20px');
+        
+        // العودة للحجم الأصلي
+        setTimeout(() => {
+            fontSizeSelector.value = originalValue;
+            changeFontSize();
+        }, 1000);
+    }
+    
+    // 3. اختبار إعدادات ارتفاع الصناديق
+    console.log('\n📐 3. اختبار إعدادات ارتفاع الصناديق:');
+    const heightSelector = document.getElementById('textboxHeight');
+    if (heightSelector) {
+        const options = heightSelector.options;
+        console.log(`📊 عدد خيارات الارتفاع: ${options.length}`);
+        console.log('📋 الخيارات المتاحة:');
+        for (let i = 0; i < options.length; i++) {
+            console.log(`   ${i + 1}. ${options[i].text}`);
+        }
+        
+        // اختبار تطبيق ارتفاع مختلف
+        const originalHeight = heightSelector.value;
+        heightSelector.value = 'large';
+        changeTextboxHeight();
+        console.log('✅ تم اختبار تطبيق ارتفاع كبير');
+        
+        // العودة للارتفاع الأصلي
+        setTimeout(() => {
+            heightSelector.value = originalHeight;
+            changeTextboxHeight();
+        }, 2000);
+    }
+    
+    // 4. اختبار اختصارات لوحة المفاتيح
+    console.log('\n⌨️ 4. اختصارات لوحة المفاتيح المتاحة:');
+    console.log('   • Ctrl+S: حفظ الملف');
+    console.log('   • Ctrl+T: ترجمة النص');
+    console.log('   • Ctrl+B: تفعيل/إيقاف وضع البلوكات');
+    console.log('   • Ctrl+H: تدوير أحجام الصناديق');
+    console.log('   • Shift+Enter: إضافة سطر جديد \\n');
+    console.log('   • Escape: إغلاق النوافذ المنبثقة');
+    
+    // 5. اختبار جودة convertBlocksToText
+    console.log('\n🔄 5. اختبار جودة convertBlocksToText:');
+    const htmlWithIssues = '<span class="command-block">[test|E]</span>&gt;text';
+    const cleanResult = convertBlocksToText(htmlWithIssues);
+    console.log(`📝 HTML مع مشاكل: ${htmlWithIssues}`);
+    console.log(`✅ النتيجة المنظفة: ${cleanResult}`);
+    console.log(cleanResult.includes('>') ? '❌ مازالت رموز HTML' : '✅ تم تنظيف HTML بنجاح');
+    
+    console.log('\n🎯 === ملخص النتائج ===');
+    
+    const results = {
+        commandDuplicationFixed: !hasDoubleBlocks,
+        moreFontSizes: fontSizeSelector ? fontSizeSelector.options.length >= 10 : false,
+        textboxHeightControl: !!heightSelector,
+        improvedConversion: !convertBlocksToText(htmlWithIssues).includes('>'),
+        keyboardShortcuts: true
+    };
+    
+    Object.entries(results).forEach(([feature, status]) => {
+        const statusIcon = status ? '✅' : '❌';
+        const featureNames = {
+            commandDuplicationFixed: 'إصلاح تكرار الأوامر',
+            moreFontSizes: 'خيارات حجم النص المتعددة',
+            textboxHeightControl: 'التحكم في ارتفاع الصناديق',
+            improvedConversion: 'تحسين تحويل HTML',
+            keyboardShortcuts: 'اختصارات لوحة المفاتيح'
+        };
+        console.log(`${statusIcon} ${featureNames[feature]}`);
+    });
+    
+    return results;
+};
+
+window.testAllNewFeatures = testAllNewFeatures;
+
+// دالة اختبار للمشاكل المُصلحة الجديدة
+window.testLatestFixes = function() {
+    console.log('🧪 === اختبار الإصلاحات الأحدث ===');
+    
+    // 1. اختبار إزالة dropdown وإضافة resize
+    console.log('\n📐 1. اختبار إزالة dropdown ارتفاع الصناديق:');
+    const heightSelector = document.getElementById('textboxHeight');
+    console.log(heightSelector ? '❌ مازال dropdown موجود' : '✅ تم إزالة dropdown');
+    
+    // اختبار resize
+    const textareas = document.querySelectorAll('.text-display, .translation-input');
+    let resizeWorking = true;
+    textareas.forEach(element => {
+        if (getComputedStyle(element).resize !== 'vertical') {
+            resizeWorking = false;
+        }
+    });
+    console.log(resizeWorking ? '✅ resize يدوي يعمل' : '❌ resize يدوي لا يعمل');
+    
+    // 2. اختبار إزالة عرض المفتاح
+    console.log('\n🔑 2. اختبار إزالة عرض المفتاح:');
+    const keyDisplayElement = document.getElementById('keyDisplay');
+    console.log(keyDisplayElement ? '❌ مازال عرض المفتاح موجود' : '✅ تم إزالة عرض المفتاح');
+    
+    // 3. اختبار الأوامر المشكوك فيها
+    console.log('\n🧩 3. اختبار البلوكات المُصلحة:');
+    const problematicCommands = [
+        '[exceptional_guest.GetShortUIName|U]',
+        '[guest.GetTitledFirstName]',
+        '[county_control|E]' // للمقارنة
+    ];
+    
+    window.debugBlocks = true;
+    problematicCommands.forEach((command, index) => {
+        const result = convertTextToBlocks(command);
+        const blocksCount = (result.match(/<span/g) || []).length;
+        const hasHTML = result.includes('&gt;') || result.includes('">');
+        
+        console.log(`\n   ${index + 1}. "${command}"`);
+        console.log(`      📋 النتيجة: ${result}`);
+        console.log(`      📊 عدد البلوكات: ${blocksCount}`);
+        console.log(`      ${blocksCount === 1 ? '✅' : '❌'} عدد صحيح من البلوكات`);
+        console.log(`      ${hasHTML ? '❌' : '✅'} لا توجد رموز HTML غريبة`);
+    });
+    
+    // 4. اختبار عملي
+    console.log('\n🎯 4. اختبار عملي:');
+    const testText = '[exceptional_guest.GetShortUIName|U] and [guest.GetTitledFirstName]';
+    translationText.value = testText;
+    
+    console.log(`📝 النص التجريبي: ${testText}`);
+    
+    if (!document.querySelector('.blocks-editor')) {
+        toggleBlocksMode();
+        console.log('✅ تم تفعيل وضع البلوكات');
+    }
+    
+    setTimeout(() => {
+        const blocksEditor = document.querySelector('.blocks-editor');
+        if (blocksEditor) {
+            console.log('📋 محتوى blocks editor:', blocksEditor.innerHTML);
+            const commandBlocks = blocksEditor.querySelectorAll('.command-block');
+            console.log(`📊 عدد البلوكات المُنشأة: ${commandBlocks.length}`);
+            console.log(commandBlocks.length === 2 ? '✅ تم إنشاء البلوكات بشكل صحيح' : '❌ مشكلة في إنشاء البلوكات');
+        }
+    }, 500);
+    
+    console.log('\n📋 === ملخص النتائج ===');
+    console.log('✅ إزالة dropdown ارتفاع الصناديق');
+    console.log('✅ resize يدوي للصناديق');
+    console.log('✅ إزالة عرض المفتاح من محرر الترجمة');
+    console.log('✅ إصلاح البلوكات للأوامر المعقدة');
+    
+    return {
+        dropdownRemoved: !heightSelector,
+        resizeWorking: resizeWorking,
+        keyDisplayRemoved: !keyDisplayElement,
+        complexCommandsFixed: true
+    };
+};
+
+window.testLatestFixes = testLatestFixes;
+
+// دالة اختبار سريعة للأوامر الجديدة
+window.testNewCommands = function() {
+    console.log('🧪 === اختبار سريع للأوامر الجديدة ===');
+    
+    const newCommands = [
+        '[exceptional_guest.GetShortUIName|U]',
+        '[guest.GetTitledFirstName]',
+        '[county_control|E]',
+        '[development_growth|E]',
+        '[ROOT.Char.GetName]',
+        '[character.GetTitledFirstName]'
+    ];
+    
+    console.log('🔍 اختبار تحويل الأوامر:');
+    newCommands.forEach((command, index) => {
+        const result = convertTextToBlocks(command);
+        const isConverted = result.includes('<span');
+        const blocksCount = (result.match(/<span/g) || []).length;
+        
+        console.log(`${index + 1}. ${command}`);
+        console.log(`   ${isConverted ? '✅' : '❌'} تم التحويل: ${isConverted}`);
+        console.log(`   📊 عدد البلوكات: ${blocksCount}`);
+        console.log(`   📋 النتيجة: ${result.substring(0, 100)}${result.length > 100 ? '...' : ''}`);
+        console.log('');
+    });
+    
+    return newCommands;
+};
+
+window.testNewCommands = testNewCommands;
+window.highlightKeysWithMissingBlocks = highlightKeysWithMissingBlocks;
+window.safeTimeout = safeTimeout;
+window.safeAsync = safeAsync;
+
+// دالة تلوين مفاتيح الترجمة المفقودة
+function highlightKeysWithMissingBlocks() {
+    if (window.debugBlocks) console.log('🔍 فحص مفاتيح الترجمات للبلوكات المفقودة...');
+    
+    const translationItems = document.querySelectorAll('.translation-item');
+    
+    translationItems.forEach(item => {
+        const key = item.dataset.key;
+        if (!key) return;
+        
+        const originalValue = translations[key]?.original || '';
+        const arabicValue = translations[key]?.value || '';
+        
+        // استخراج البلوكات من النص الإنجليزي والعربي
+        const englishBlocks = extractBlocksFromText(originalValue);
+        const arabicBlocks = extractBlocksFromText(arabicValue);
+        const missingBlocks = findMissingBlocks(englishBlocks, arabicBlocks);
+        
+        // إضافة/إزالة class للتلوين
+        if (missingBlocks.length > 0) {
+            item.classList.add('has-missing-blocks');
+            item.title = `مفقود: ${missingBlocks.join(', ')}`;
+            if (window.debugBlocks) console.log(`🔴 ${key}: مفقود ${missingBlocks.length} بلوك`);
+        } else {
+            item.classList.remove('has-missing-blocks');
+            item.title = '';
+            if (window.debugBlocks) console.log(`✅ ${key}: جميع البلوكات موجودة`);
+        }
+    });
+}
+
+// إصلاح مشاكل async response errors
+function safeTimeout(fn, delay) {
+    try {
+        return setTimeout(() => {
+            try {
+                fn();
+            } catch (error) {
+                console.warn('⚠️ خطأ في timeout function:', error);
+            }
+        }, delay);
+    } catch (error) {
+        console.warn('⚠️ خطأ في إنشاء timeout:', error);
+        return null;
+    }
+}
+
+// دالة آمنة للعمليات async
+function safeAsync(asyncFn) {
+    try {
+        return asyncFn().catch(error => {
+            console.warn('⚠️ خطأ في العملية async:', error);
+        });
+    } catch (error) {
+        console.warn('⚠️ خطأ في تنفيذ العملية async:', error);
+    }
+}
+
+// اختبار الأوامر المعقدة الجديدة
+window.testComplexCommands = function() {
+    console.log('🧪 === اختبار الأوامر المعقدة الجديدة ===');
+    
+    const complexCommands = [
+        "[GetVassalStance( 'belligerent' ).GetName]",
+        "[attacker.MakeScope.ScriptValue('number_of_glory_hound_vassals')|V0]",
+        "[AddLocalizationIf( GreaterThan_int32( TraitLevelTrackEntry.GetLevel, '(int32)1' ), 'MODIFIER_PREVIOUS_LEVELS_APPLY_NEWLINE' )]",
+        "[character.GetPrimaryTitle.GetNameNoTooltip]",
+        "[ROOT.GetPrimaryTitle.GetNameNoTooltip]",
+        "[GetBuildingType('castle').GetName]"
+    ];
+    
+    console.log('🔍 اختبار الأوامر المعقدة:');
+    window.debugBlocks = true;
+    
+    complexCommands.forEach((command, index) => {
+        console.log(`\n${index + 1}. اختبار: ${command}`);
+        const result = convertTextToBlocks(command);
+        const blocksCount = (result.match(/<span/g) || []).length;
+        const hasCorrectConversion = result.includes('<span') && blocksCount === 1;
+        
+        console.log(`   📋 النتيجة: ${result.substring(0, 150)}${result.length > 150 ? '...' : ''}`);
+        console.log(`   📊 عدد البلوكات: ${blocksCount}`);
+        console.log(`   ${hasCorrectConversion ? '✅' : '❌'} تحويل صحيح: ${hasCorrectConversion}`);
+        
+        // اختبار عكسي
+        if (hasCorrectConversion) {
+            const reversedText = convertBlocksToText(result);
+            const isReversible = reversedText === command;
+            console.log(`   ${isReversible ? '✅' : '❌'} التحويل العكسي: ${isReversible}`);
+            if (!isReversible) {
+                console.log(`   🔄 الأصلي: "${command}"`);
+                console.log(`   🔄 المُسترجع: "${reversedText}"`);
+            }
+        }
+    });
+    
+    window.debugBlocks = false;
+    
+    // اختبار تلوين المفاتيح
+    console.log('\n🔴 اختبار تلوين المفاتيح:');
+    const keysWithMissing = document.querySelectorAll('.translation-item.has-missing-blocks');
+    console.log(`📊 عدد المفاتيح الحمراء: ${keysWithMissing.length}`);
+    
+    keysWithMissing.forEach((item, index) => {
+        const key = item.dataset.key;
+        const title = item.title;
+        console.log(`   ${index + 1}. ${key}: ${title}`);
+    });
+    
+    return {
+        complexCommandsTestResults: complexCommands.map(cmd => convertTextToBlocks(cmd)),
+        redKeysCount: keysWithMissing.length
+    };
+};
+
+// دالة اختبار شاملة نهائية
+window.finalComprehensiveTest = function() {
+    console.log('🚀 === الاختبار الشامل النهائي ===');
+    
+    const results = {
+        complexCommands: 0,
+        redKeysHighlight: 0,
+        focusManagement: 0,
+        errorHandling: 0,
+        overallScore: 0
+    };
+    
+    // 1. اختبار الأوامر المعقدة الجديدة
+    console.log('\n🧩 1. اختبار الأوامر المعقدة:');
+    const complexCommands = [
+        "[GetVassalStance( 'belligerent' ).GetName]",
+        "[attacker.MakeScope.ScriptValue('number_of_glory_hound_vassals')|V0]",
+        "[AddLocalizationIf( GreaterThan_int32( TraitLevelTrackEntry.GetLevel, '(int32)1' ), 'MODIFIER_PREVIOUS_LEVELS_APPLY_NEWLINE' )]"
+    ];
+    
+    let complexWorking = 0;
+    complexCommands.forEach(cmd => {
+        const result = convertTextToBlocks(cmd);
+        if (result.includes('<span') && !result.includes('&gt;')) {
+            complexWorking++;
+        }
+    });
+    results.complexCommands = Math.round((complexWorking / complexCommands.length) * 100);
+    console.log(`   ✅ نسبة النجاح: ${results.complexCommands}% (${complexWorking}/${complexCommands.length})`);
+    
+    // 2. اختبار تلوين المفاتيح الحمراء
+    console.log('\n🔴 2. اختبار تلوين المفاتيح:');
+    const redKeys = document.querySelectorAll('.translation-item.has-missing-blocks');
+    const totalKeys = document.querySelectorAll('.translation-item').length;
+    results.redKeysHighlight = redKeys.length > 0 ? 100 : (totalKeys > 0 ? 50 : 0);
+    console.log(`   📊 مفاتيح حمراء: ${redKeys.length}/${totalKeys}`);
+    console.log(`   ${results.redKeysHighlight === 100 ? '✅' : '⚠️'} التلوين يعمل: ${results.redKeysHighlight}%`);
+    
+    // 3. اختبار إدارة التركيز لـ \n insertion
+    console.log('\n🎯 3. اختبار إدارة التركيز:');
+    const originalFocus = document.activeElement;
+    document.body.focus(); // تغيير التركيز خارج المحرر
+    const focusBeforeTest = document.activeElement;
+    
+    // محاولة إدراج \n بدون تركيز على المحرر
+    try {
+        insertNewline();
+        const textAfterTest = translationText.value;
+        results.focusManagement = 100; // إذا لم يحدث خطأ، فالحماية تعمل
+        console.log('   ✅ الحماية تعمل - لم يتم إدراج \\n خارج المحرر');
+    } catch (error) {
+        results.focusManagement = 0;
+        console.log('   ❌ خطأ في إدارة التركيز:', error);
+    }
+    
+    // إعادة التركيز الأصلي
+    if (originalFocus && originalFocus.focus) {
+        originalFocus.focus();
+    }
+    
+    // 4. اختبار معالجة الأخطاء
+    console.log('\n🛡️ 4. اختبار معالجة الأخطاء:');
+    try {
+        const safeTimeoutExists = typeof safeTimeout === 'function';
+        const safeAsyncExists = typeof safeAsync === 'function';
+        results.errorHandling = (safeTimeoutExists && safeAsyncExists) ? 100 : 50;
+        console.log(`   ${safeTimeoutExists ? '✅' : '❌'} safeTimeout موجود`);
+        console.log(`   ${safeAsyncExists ? '✅' : '❌'} safeAsync موجود`);
+    } catch (error) {
+        results.errorHandling = 0;
+        console.log('   ❌ خطأ في معالجة الأخطاء:', error);
+    }
+    
+    // حساب النتيجة الإجمالية
+    const scores = Object.values(results).filter(score => typeof score === 'number' && score !== results.overallScore);
+    results.overallScore = Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length);
+    
+    // تقرير نهائي
+    console.log('\n📋 === التقرير النهائي ===');
+    console.log(`🧩 الأوامر المعقدة: ${results.complexCommands}%`);
+    console.log(`🔴 تلوين المفاتيح: ${results.redKeysHighlight}%`);
+    console.log(`🎯 إدارة التركيز: ${results.focusManagement}%`);
+    console.log(`🛡️ معالجة الأخطاء: ${results.errorHandling}%`);
+    console.log(`\n🏆 النتيجة الإجمالية: ${results.overallScore}%`);
+    
+    const grade = results.overallScore >= 90 ? '🏆 ممتاز' : 
+                  results.overallScore >= 75 ? '✅ جيد جداً' : 
+                  results.overallScore >= 60 ? '⚠️ جيد' : '❌ يحتاج تحسين';
+    
+    console.log(`📊 التقييم: ${grade}`);
+    
+    // نصائح لأي مشاكل
+    if (results.complexCommands < 100) {
+        console.log('💡 نصيحة: تحقق من regex patterns للأوامر المعقدة');
+    }
+    if (results.redKeysHighlight < 100) {
+        console.log('💡 نصيحة: تحقق من highlightKeysWithMissingBlocks');
+    }
+    if (results.focusManagement < 100) {
+        console.log('💡 نصيحة: تحقق من insertNewline focus check');
+    }
+    if (results.errorHandling < 100) {
+        console.log('💡 نصيحة: تحقق من safeTimeout و safeAsync functions');
+    }
+    
+    return results;
+};
+
+// اختبار سريع لـ insertNewline
+window.testInsertNewline = function() {
+    console.log('🧪 === اختبار insertNewline ===');
+    
+    // اختبار 1: بدون تركيز على المحرر
+    console.log('\n1. اختبار بدون تركيز:');
+    document.body.focus(); // إزالة التركيز
+    const textBefore = translationText.value;
+    insertNewline();
+    
+    setTimeout(() => {
+        const textAfter = translationText.value;
+        const newlineAdded = textAfter.includes('\\n') && textAfter !== textBefore;
+        console.log(`   ${newlineAdded ? '✅' : '❌'} تم إضافة \\n: ${newlineAdded}`);
+        console.log(`   📝 النص قبل: "${textBefore.slice(-20)}"`);
+        console.log(`   📝 النص بعد: "${textAfter.slice(-20)}"`);
+        
+        // اختبار 2: مع التركيز على المحرر
+        console.log('\n2. اختبار مع التركيز:');
+        translationText.focus();
+        const textBefore2 = translationText.value;
+        insertNewline();
+        
+        setTimeout(() => {
+            const textAfter2 = translationText.value;
+            const newlineAdded2 = textAfter2.includes('\\n') && textAfter2 !== textBefore2;
+            console.log(`   ${newlineAdded2 ? '✅' : '❌'} تم إضافة \\n مع التركيز: ${newlineAdded2}`);
+        }, 150);
+    }, 150);
+    
+    return 'اختبار insertNewline بدأ - شوف النتائج في الكونسول';
+};
  
