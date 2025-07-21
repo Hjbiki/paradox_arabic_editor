@@ -27,22 +27,33 @@ let apiKeys = {
     google: ''
 };
 
-// DOM Elements
-const translationList = document.getElementById('translationList');
-// تم إزالة keyDisplay - المفتاح موجود في قائمة الترجمات
-const originalText = document.getElementById('originalText');
-const translationText = document.getElementById('translationText');
-const searchInput = document.getElementById('searchInput');
-const statsText = document.getElementById('statsText');
-const statusText = document.getElementById('statusText');
-const progressBar = document.getElementById('progressBar');
-const fileInput = document.getElementById('fileInput');
-const notification = document.getElementById('notification');
-const loadingOverlay = document.getElementById('loadingOverlay');
-const settingsModal = document.getElementById('settingsModal');
+// DOM Elements - سيتم تعريفها بعد تحميل DOM
+let translationList, originalText, translationText, searchInput, statsText, statusText, progressBar, fileInput, notification, loadingOverlay, settingsModal;
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
+    // تعريف العناصر DOM بعد تحميل الصفحة
+    translationList = document.getElementById('translationList');
+    originalText = document.getElementById('originalText');
+    translationText = document.getElementById('translationText');
+    searchInput = document.getElementById('searchInput');
+    statsText = document.getElementById('statsText');
+    statusText = document.getElementById('statusText');
+    progressBar = document.getElementById('progressBar');
+    fileInput = document.getElementById('fileInput');
+    notification = document.getElementById('notification');
+    loadingOverlay = document.getElementById('loadingOverlay');
+    settingsModal = document.getElementById('settingsModal');
+    
+    // التحقق من وجود العناصر الأساسية
+    if (!translationList || !originalText || !translationText) {
+        console.error('❌ فشل في العثور على العناصر الأساسية في DOM');
+        alert('خطأ في تحميل الصفحة. يرجى إعادة تحميل الصفحة.');
+        return;
+    }
+    
+    console.log('✅ تم تحميل جميع عناصر DOM بنجاح');
+    
     // إخفاء شاشة التحميل عند بدء التطبيق
     hideLoading();
     
@@ -482,6 +493,10 @@ function findMissingKeys() {
 }
 
 function populateTranslationList() {
+    if (!translationList) {
+        console.warn('⚠️ translationList غير موجود');
+        return;
+    }
     translationList.innerHTML = '';
     
     Object.entries(filteredTranslations).forEach(([key, value], index) => {
@@ -577,14 +592,18 @@ function selectTranslationByIndex(index) {
         console.log(`✅ عرض النص الإنجليزي المرجعي: "${cleanEnglishText}"`);
     } else {
         // لا يوجد نص مرجعي من مجلد english
-        originalText.innerHTML = ''; // مسح أي محتوى سابق
-        originalText.textContent = `📂 ضع ملف "${currentFile?.name || 'مطابق'}" في مجلد english للمقارنة`;
-        originalText.style.color = '#6c757d'; // لون رمادي للرسالة
+        if (originalText) {
+            originalText.innerHTML = ''; // مسح أي محتوى سابق
+            originalText.textContent = `📂 ضع ملف "${currentFile?.name || 'مطابق'}" في مجلد english للمقارنة`;
+            originalText.style.color = '#6c757d'; // لون رمادي للرسالة
+        }
         console.log(`ℹ️ لا يوجد نص مرجعي للمفتاح: ${key}`);
     }
     
-    translationText.value = cleanValue;
-    currentEditedValue = cleanValue;
+    if (translationText) {
+        translationText.value = cleanValue;
+        currentEditedValue = cleanValue;
+    }
     
     // Check if this translation was modified
     if (modifiedKeys.has(key)) {
@@ -910,33 +929,45 @@ function updateStats() {
         statsMessage += ` - تم تعديل: ${modified}`;
     }
     
-    statsText.textContent = statsMessage;
+    if (statsText) {
+        statsText.textContent = statsMessage;
+    }
     
     // Update progress bar
-    if (total > 0) {
-        const progress = filtered / total;
-        progressBar.style.width = (progress * 100) + '%';
-    } else {
-        progressBar.style.width = '0%';
+    if (progressBar) {
+        if (total > 0) {
+            const progress = filtered / total;
+            progressBar.style.width = (progress * 100) + '%';
+        } else {
+            progressBar.style.width = '0%';
+        }
     }
 }
 
 function updateStatus(filename) {
-    if (filename) {
-        statusText.textContent = `الملف: ${filename}`;
-    } else {
-        statusText.textContent = 'لم يتم تحميل ملف';
+    if (statusText) {
+        if (filename) {
+            statusText.textContent = `الملف: ${filename}`;
+        } else {
+            statusText.textContent = 'لم يتم تحميل ملف';
+        }
     }
 }
 
 // Utility functions
 function showNotification(message, type = 'info') {
-    notification.textContent = message;
-    notification.className = `notification ${type} show`;
+    if (notification) {
+        notification.textContent = message;
+        notification.className = `notification ${type} show`;
+    } else {
+        console.log(`📢 Notification: [${type}] ${message}`);
+    }
     
     // إخفاء الإخطار تلقائياً بعد 4 ثوان
     setTimeout(() => {
-        notification.classList.remove('show');
+        if (notification) {
+            notification.classList.remove('show');
+        }
     }, 4000);
     
     // إخفاء فوري عند النقر
@@ -3368,5 +3399,67 @@ window.testInsertNewline = function() {
     }, 150);
     
     return 'اختبار insertNewline بدأ - شوف النتائج في الكونسول';
+};
+
+// اختبار إصلاح مشكلة null elements
+window.testNullElementsFix = function() {
+    console.log('🧪 === اختبار إصلاح مشكلة null elements ===');
+    
+    const elements = {
+        translationList: translationList,
+        originalText: originalText,
+        translationText: translationText,
+        searchInput: searchInput,
+        statsText: statsText,
+        statusText: statusText,
+        progressBar: progressBar,
+        fileInput: fileInput,
+        notification: notification,
+        loadingOverlay: loadingOverlay,
+        settingsModal: settingsModal
+    };
+    
+    console.log('\n📋 حالة العناصر DOM:');
+    let allElementsOk = true;
+    
+    Object.entries(elements).forEach(([name, element]) => {
+        const exists = element !== null && element !== undefined;
+        console.log(`   ${exists ? '✅' : '❌'} ${name}: ${exists ? 'موجود' : 'مفقود'}`);
+        if (!exists && ['translationList', 'originalText', 'translationText'].includes(name)) {
+            allElementsOk = false;
+        }
+    });
+    
+    console.log(`\n🏆 النتيجة: ${allElementsOk ? '✅ جميع العناصر الأساسية موجودة' : '❌ بعض العناصر الأساسية مفقودة'}`);
+    
+    // اختبار الدوال الآمنة
+    console.log('\n🛡️ اختبار الدوال الآمنة:');
+    
+    try {
+        updateStats();
+        console.log('   ✅ updateStats() - يعمل بدون أخطاء');
+    } catch (error) {
+        console.log('   ❌ updateStats() - خطأ:', error.message);
+    }
+    
+    try {
+        updateStatus('test.yml');
+        console.log('   ✅ updateStatus() - يعمل بدون أخطاء');
+    } catch (error) {
+        console.log('   ❌ updateStatus() - خطأ:', error.message);
+    }
+    
+    try {
+        showNotification('اختبار الإشعارات', 'info');
+        console.log('   ✅ showNotification() - يعمل بدون أخطاء');
+    } catch (error) {
+        console.log('   ❌ showNotification() - خطأ:', error.message);
+    }
+    
+    return {
+        allElementsOk: allElementsOk,
+        elements: elements,
+        timestamp: new Date().toISOString()
+    };
 };
  
