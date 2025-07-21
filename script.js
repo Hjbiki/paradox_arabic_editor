@@ -2161,9 +2161,26 @@ function loadApiKeys() {
 
 // Translation Functions
 async function translateCurrentText() {
-    const originalTextContent = originalText.textContent;
+    if (!originalText) {
+        showNotification('عنصر النص المرجعي غير موجود', 'error');
+        return;
+    }
     
-    if (!originalTextContent || originalTextContent.includes('ضع ملف')) {
+    // استخراج النص الأصلي - سواء كان في وضع البلوكات أو العادي
+    let originalTextContent = '';
+    
+    if (originalText.classList.contains('blocks-reference-mode')) {
+        // في وضع البلوكات - استخراج النص من البلوكات
+        originalTextContent = convertBlocksToText(originalText.innerHTML);
+        console.log('📋 استخراج من وضع البلوكات:', originalTextContent);
+    } else {
+        // في الوضع العادي
+        originalTextContent = originalText.textContent || originalText.innerText || '';
+    }
+    
+    console.log('📝 النص الأصلي للترجمة:', originalTextContent);
+    
+    if (!originalTextContent || originalTextContent.trim() === '' || originalTextContent.includes('ضع ملف')) {
         showNotification('لا يوجد نص مرجعي للترجمة', 'warning');
         return;
     }
@@ -2182,9 +2199,12 @@ async function translateCurrentText() {
     try {
         let translatedText = '';
         
+        console.log(`🔄 بدء الترجمة باستخدام ${selectedService} للنص: "${originalTextContent}"`);
+        
         switch (selectedService) {
             case 'mymemory':
                 translatedText = await translateWithMyMemory(originalTextContent);
+                console.log('✅ MyMemory أرجع النص:', translatedText);
                 break;
             case 'claude':
                 translatedText = await translateWithClaude(originalTextContent);
@@ -2205,9 +2225,34 @@ async function translateCurrentText() {
                 throw new Error('خدمة ترجمة غير مدعومة');
         }
         
-        if (translatedText) {
-            translationText.value = translatedText;
-            translationText.focus();
+        console.log('🎯 النص المترجم النهائي:', translatedText);
+        
+        if (translatedText && translatedText.trim() !== '') {
+            if (translationText) {
+                const oldValue = translationText.value;
+                translationText.value = translatedText;
+                translationText.focus();
+                
+                console.log(`📝 تم تحديث المحرر من "${oldValue}" إلى "${translatedText}"`);
+                
+                // التحقق من أن التحديث تم بنجاح
+                if (translationText.value === translatedText) {
+                    console.log('✅ تأكيد: النص تم تحديثه بنجاح في المحرر');
+                } else {
+                    console.error('❌ فشل تحديث النص في المحرر');
+                    showNotification('خطأ في تحديث النص في المحرر', 'error');
+                    return;
+                }
+            } else {
+                console.error('❌ translationText element غير موجود');
+                showNotification('خطأ في تحديث النص - يرجى إعادة تحميل الصفحة', 'error');
+                return;
+            }
+        } else {
+            console.error('❌ النص المترجم فارغ أو غير صالح:', translatedText);
+            showNotification('النص المترجم فارغ - يرجى المحاولة مرة أخرى', 'warning');
+            return;
+        }
             
             // Mark as modified
             hasUnsavedChanges = true;
@@ -2233,7 +2278,6 @@ async function translateCurrentText() {
             updateSaveButton();
             
             showNotification(`تم ترجمة النص بواسطة ${getServiceName(selectedService)} 🎯`, 'success');
-        }
         
     } catch (error) {
         console.error('خطأ في الترجمة:', error);
@@ -2270,18 +2314,42 @@ function getServiceName(service) {
 
 // MyMemory Translation (مجاني - بدون API key)
 async function translateWithMyMemory(text) {
-    const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|ar`);
+    console.log('🌐 MyMemory: بدء الترجمة للنص:', text);
     
-    if (!response.ok) {
-        throw new Error('خطأ في خدمة MyMemory');
+    if (!text || text.trim() === '') {
+        throw new Error('النص المُراد ترجمته فارغ');
     }
     
-    const data = await response.json();
+    const cleanText = text.trim();
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanText)}&langpair=en|ar`;
+    console.log('🔗 MyMemory URL:', url);
     
-    if (data.responseStatus === 200) {
-        return data.responseData.translatedText.trim();
-    } else {
-        throw new Error('فشل في الترجمة من MyMemory');
+    try {
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`خطأ HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('📥 MyMemory response:', data);
+        
+        if (data.responseStatus === 200 && data.responseData) {
+            const translatedText = data.responseData.translatedText;
+            if (translatedText && translatedText.trim() !== '') {
+                const finalText = translatedText.trim();
+                console.log('✅ MyMemory ترجمة ناجحة:', finalText);
+                return finalText;
+            } else {
+                throw new Error('النص المُترجم فارغ من MyMemory');
+            }
+        } else {
+            console.error('❌ MyMemory خطأ في الاستجابة:', data);
+            throw new Error(data.responseDetails || 'فشل في الترجمة من MyMemory');
+        }
+    } catch (error) {
+        console.error('❌ MyMemory خطأ عام:', error);
+        throw error;
     }
 }
 
@@ -3144,6 +3212,7 @@ window.testNewCommands = testNewCommands;
 window.highlightKeysWithMissingBlocks = highlightKeysWithMissingBlocks;
 window.safeTimeout = safeTimeout;
 window.safeAsync = safeAsync;
+window.testMyMemoryTranslation = testMyMemoryTranslation;
 
 // دالة تلوين مفاتيح الترجمة المفقودة
 function highlightKeysWithMissingBlocks() {
@@ -3461,5 +3530,72 @@ window.testNullElementsFix = function() {
         elements: elements,
         timestamp: new Date().toISOString()
     };
+};
+
+// اختبار سريع لـ MyMemory translation
+window.testMyMemoryTranslation = function() {
+    console.log('🧪 === اختبار MyMemory Translation ===');
+    
+    // التحقق من العناصر المطلوبة
+    console.log('\n📋 فحص العناصر:');
+    console.log(`   originalText: ${originalText ? '✅ موجود' : '❌ مفقود'}`);
+    console.log(`   translationText: ${translationText ? '✅ موجود' : '❌ مفقود'}`);
+    
+    if (!originalText || !translationText) {
+        console.log('❌ العناصر الأساسية مفقودة - لا يمكن الاختبار');
+        return;
+    }
+    
+    // إضافة نص تجريبي
+    const testText = 'Hello World';
+    originalText.textContent = testText;
+    console.log(`📝 تم وضع نص تجريبي: "${testText}"`);
+    
+    // اختبار ترجمة MyMemory مباشرة
+    console.log('\n🌐 اختبار MyMemory API مباشرة:');
+    
+    translateWithMyMemory(testText)
+        .then(result => {
+            console.log('✅ نتيجة MyMemory:', result);
+            
+            // اختبار تحديث المحرر
+            if (translationText) {
+                const oldValue = translationText.value;
+                translationText.value = result;
+                console.log(`📝 تم تحديث المحرر من "${oldValue}" إلى "${result}"`);
+                
+                if (translationText.value === result) {
+                    console.log('✅ تأكيد: تحديث المحرر نجح');
+                    showNotification('✅ اختبار MyMemory نجح!', 'success');
+                } else {
+                    console.log('❌ فشل تحديث المحرر');
+                    showNotification('❌ فشل تحديث المحرر', 'error');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('❌ فشل اختبار MyMemory:', error);
+            showNotification(`❌ فشل MyMemory: ${error.message}`, 'error');
+        });
+    
+    // اختبار translateCurrentText كاملة
+    console.log('\n🔄 اختبار translateCurrentText كاملة:');
+    setTimeout(() => {
+        const serviceSelect = document.getElementById('translationService');
+        if (serviceSelect) {
+            serviceSelect.value = 'mymemory';
+            console.log('🎯 تم تعيين الخدمة إلى MyMemory');
+            
+            translateCurrentText()
+                .then(() => {
+                    console.log('✅ translateCurrentText اكتمل');
+                })
+                .catch(error => {
+                    console.error('❌ خطأ في translateCurrentText:', error);
+                });
+        }
+    }, 1000);
+    
+    return 'اختبار MyMemory بدأ - شوف النتائج في الكونسول';
 };
  
