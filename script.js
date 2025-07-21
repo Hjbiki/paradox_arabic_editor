@@ -15,6 +15,15 @@ let currentEditingKey = ''; // Track the key being edited to avoid index conflic
 // Auto-save to localStorage
 let autoSaveInterval;
 
+// API Keys Storage
+let apiKeys = {
+    claude: '',
+    openai: '',
+    gemini: '',
+    deepl: '',
+    google: ''
+};
+
 // DOM Elements
 const translationList = document.getElementById('translationList');
 const keyDisplay = document.getElementById('keyDisplay');
@@ -27,16 +36,30 @@ const progressBar = document.getElementById('progressBar');
 const fileInput = document.getElementById('fileInput');
 const notification = document.getElementById('notification');
 const loadingOverlay = document.getElementById('loadingOverlay');
+const settingsModal = document.getElementById('settingsModal');
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
+    // إخفاء شاشة التحميل عند بدء التطبيق
+    hideLoading();
+    
     setupEventListeners();
     setupAutoSave();
     loadFromLocalStorage();
+    loadApiKeys();
     updateStats();
     updateSaveButton(); // Initialize save button state
     
-
+    // إخفاء شاشة التحميل مرة أخرى للتأكد
+    setTimeout(hideLoading, 100);
+    
+    // Safety timeout لضمان إخفاء شاشة التحميل في جميع الحالات
+    setTimeout(() => {
+        if (loadingOverlay && loadingOverlay.classList.contains('show')) {
+            console.warn('⚠️ إخفاء إجباري لشاشة التحميل بعد safety timeout');
+            hideLoading();
+        }
+    }, 5000); // 5 ثواني
 });
 
 // Setup event listeners
@@ -183,7 +206,8 @@ function handleFile(file) {
         return;
     }
     
-    showLoading(true);
+    showLoading();
+    console.log('🔄 بدء تحميل الملف:', file.name);
     
     const reader = new FileReader();
     reader.onload = function(e) {
@@ -197,18 +221,21 @@ function handleFile(file) {
             loadYamlContent(content, file.name);
             currentFile = file;
             showNotification(`تم تحميل الملف بنجاح: ${file.name}`, 'success');
+            console.log('✅ تم تحميل الملف بنجاح');
         } catch (error) {
             console.error('خطأ في قراءة الملف:', error);
             showNotification(`خطأ في قراءة الملف "${file.name}": ${error.message}`, 'error');
         } finally {
-            showLoading(false);
+            hideLoading();
+            // دالة إضافية للتأكد
+            setTimeout(ensureLoadingHidden, 100);
         }
     };
     
     reader.onerror = function(e) {
         console.error('خطأ في FileReader:', e);
         showNotification(`خطأ في قراءة الملف "${file.name}": فشل في قراءة محتوى الملف`, 'error');
-        showLoading(false);
+        hideLoading();
     };
     
     reader.readAsText(file, 'UTF-8');
@@ -216,6 +243,8 @@ function handleFile(file) {
 
 function loadYamlContent(content, filename) {
     try {
+        console.log('📂 بدء معالجة محتوى YAML...');
+        
         // التحقق من وجود محتوى
         if (!content || content.trim() === '') {
             throw new Error('الملف فارغ أو لا يحتوي على محتوى');
@@ -307,10 +336,14 @@ function loadYamlContent(content, filename) {
         
         console.log(`تم تحميل ${Object.keys(yamlData).length} ترجمة بنجاح من الملف: ${filename}`);
         
-        // محاولة تحميل ملف إنجليزي من مجلد english كمرجع إضافي
-        loadEnglishReferenceFile(filename);
+        // إخفاء شاشة التحميل بعد الانتهاء من التحميل الأساسي
+        setTimeout(hideLoading, 50);
+        
+        // محاولة تحميل ملف إنجليزي من مجلد english كمرجع إضافي (في الخلفية)
+        setTimeout(() => loadEnglishReferenceFile(filename), 100);
         
     } catch (error) {
+        hideLoading(); // إخفاء التحميل في حالة الخطأ أيضاً
         console.error('خطأ في تحليل YAML:', error);
         throw new Error(`خطأ في تحليل YAML: ${error.message}`);
     }
@@ -319,12 +352,20 @@ function loadYamlContent(content, filename) {
 // تحميل ملف إنجليزي مرجعي من مجلد english (اختياري لمقارنة إضافية)
 async function loadEnglishReferenceFile(filename) {
     try {
-        // محاولة تحميل الملف من مجلد english
+        // محاولة تحميل الملف من مجلد english مع timeout
         const englishPath = `english/${filename}`;
         
         console.log(`💡 محاولة تحميل مرجع إنجليزي إضافي من: ${englishPath}`);
         
-        const response = await fetch(englishPath);
+        // إضافة timeout للطلب لتجنب التعليق
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 ثانية timeout
+        
+        const response = await fetch(englishPath, { 
+            signal: controller.signal 
+        });
+        
+        clearTimeout(timeoutId);
         
         if (response.ok) {
             const englishContent = await response.text();
@@ -350,13 +391,16 @@ async function loadEnglishReferenceFile(filename) {
                 }
             }
         } else {
-            console.log(`📄 لا يوجد مرجع إنجليزي إضافي في: ${englishPath}`);
-            console.log(`ℹ️ يمكنك وضع الملف الإنجليزي المطابق في مجلد english للمقارنة`);
+            console.log(`📄 لا يوجد مرجع إنجليزي إضافي في: ${englishPath} (${response.status})`);
         }
         
     } catch (error) {
-        console.log(`ℹ️ لا يمكن تحميل مرجع إضافي:`, error.message);
-        console.log(`✅ سيتم استخدام النص الأصلي من الملف المرفوع كمرجع`);
+        if (error.name === 'AbortError') {
+            console.log(`⏱️ انتهت مهلة تحميل المرجع الإنجليزي (${filename})`);
+        } else {
+            console.log(`ℹ️ لا يمكن تحميل مرجع إضافي: ${error.message}`);
+        }
+        // تجاهل الأخطاء والمتابعة
     }
 }
 
@@ -985,6 +1029,11 @@ window.updateTranslation = updateTranslation;
 window.undoChanges = undoChanges;
 window.changeFontSize = changeFontSize;
 window.changeTextAlignment = changeTextAlignment;
+window.copyToClipboard = copyToClipboard;
+window.openSettings = openSettings;
+window.closeSettings = closeSettings;
+window.saveApiSettings = saveApiSettings;
+window.translateCurrentText = translateCurrentText;
 window.showDebugInfo = showDebugInfo;
 window.showMissingKeys = showMissingKeys;
 // Font and alignment controls
@@ -1141,4 +1190,401 @@ function addMissingKeysToTranslation(missingKeys) {
         showNotification(`⚠️ لم يتم إضافة أي مفاتيح`, 'warning');
     }
 }
+
+// Copy to Clipboard Function
+async function copyToClipboard(elementId) {
+    try {
+        const element = document.getElementById(elementId);
+        let textToCopy = '';
+        
+        if (element.tagName === 'TEXTAREA' || element.tagName === 'INPUT') {
+            textToCopy = element.value;
+        } else {
+            textToCopy = element.textContent || element.innerText;
+        }
+        
+        if (!textToCopy.trim()) {
+            showNotification('لا يوجد نص للنسخ', 'warning');
+            return;
+        }
+        
+        await navigator.clipboard.writeText(textToCopy);
+        showNotification('تم نسخ النص بنجاح! 📋', 'success');
+        
+        // Visual feedback
+        const copyIcon = event.target.closest('.copy-icon');
+        if (copyIcon) {
+            const originalIcon = copyIcon.innerHTML;
+            copyIcon.innerHTML = '<i class="fas fa-check"></i>';
+            copyIcon.style.background = 'rgba(40, 167, 69, 0.8)';
+            
+            setTimeout(() => {
+                copyIcon.innerHTML = originalIcon;
+                copyIcon.style.background = 'rgba(108, 99, 255, 0.8)';
+            }, 1000);
+        }
+        
+    } catch (error) {
+        console.error('خطأ في النسخ:', error);
+        showNotification('فشل في نسخ النص', 'error');
+    }
+}
+
+// Settings Modal Functions
+function openSettings() {
+    settingsModal.classList.add('show');
+    loadApiKeysToForm();
+}
+
+function closeSettings() {
+    settingsModal.classList.remove('show');
+}
+
+function loadApiKeysToForm() {
+    document.getElementById('claudeApiKey').value = apiKeys.claude || '';
+    document.getElementById('openaiApiKey').value = apiKeys.openai || '';
+    document.getElementById('geminiApiKey').value = apiKeys.gemini || '';
+    document.getElementById('deeplApiKey').value = apiKeys.deepl || '';
+    document.getElementById('googleApiKey').value = apiKeys.google || '';
+}
+
+function saveApiSettings() {
+    apiKeys.claude = document.getElementById('claudeApiKey').value.trim();
+    apiKeys.openai = document.getElementById('openaiApiKey').value.trim();
+    apiKeys.gemini = document.getElementById('geminiApiKey').value.trim();
+    apiKeys.deepl = document.getElementById('deeplApiKey').value.trim();
+    apiKeys.google = document.getElementById('googleApiKey').value.trim();
+    
+    // Save to localStorage
+    localStorage.setItem('apiKeys', JSON.stringify(apiKeys));
+    
+    closeSettings();
+    showNotification('تم حفظ إعدادات API بنجاح! 🔑', 'success');
+}
+
+function loadApiKeys() {
+    try {
+        const savedKeys = localStorage.getItem('apiKeys');
+        if (savedKeys) {
+            apiKeys = { ...apiKeys, ...JSON.parse(savedKeys) };
+        }
+    } catch (error) {
+        console.error('خطأ في تحميل مفاتيح API:', error);
+    }
+}
+
+// Translation Functions
+async function translateCurrentText() {
+    const originalTextContent = originalText.textContent;
+    
+    if (!originalTextContent || originalTextContent.includes('ضع ملف')) {
+        showNotification('لا يوجد نص مرجعي للترجمة', 'warning');
+        return;
+    }
+    
+    const selectedService = document.getElementById('translationService').value;
+    
+    // MyMemory لا يحتاج API key
+    if (selectedService !== 'mymemory' && !apiKeys[selectedService]) {
+        showNotification(`يرجى إدخال مفتاح ${getServiceName(selectedService)} في الإعدادات`, 'warning');
+        openSettings();
+        return;
+    }
+    
+    showLoading();
+    
+    try {
+        let translatedText = '';
+        
+        switch (selectedService) {
+            case 'mymemory':
+                translatedText = await translateWithMyMemory(originalTextContent);
+                break;
+            case 'claude':
+                translatedText = await translateWithClaude(originalTextContent);
+                break;
+            case 'chatgpt':
+                translatedText = await translateWithChatGPT(originalTextContent);
+                break;
+            case 'gemini':
+                translatedText = await translateWithGemini(originalTextContent);
+                break;
+            case 'deepl':
+                translatedText = await translateWithDeepL(originalTextContent);
+                break;
+            case 'google':
+                translatedText = await translateWithGoogle(originalTextContent);
+                break;
+            default:
+                throw new Error('خدمة ترجمة غير مدعومة');
+        }
+        
+        if (translatedText) {
+            translationText.value = translatedText;
+            translationText.focus();
+            
+            // Mark as modified
+            hasUnsavedChanges = true;
+            if (currentEditingKey) {
+                modifiedKeys.add(currentEditingKey);
+                translations[currentEditingKey] = translatedText;
+                filteredTranslations[currentEditingKey] = translatedText;
+                
+                // Update list item
+                const items = translationList.querySelectorAll('.translation-item');
+                if (items[currentIndex]) {
+                    items[currentIndex].classList.add('modified');
+                    const preview = translatedText.length > previewLength ? 
+                        translatedText.substring(0, previewLength) + '...' : translatedText;
+                    const previewElement = items[currentIndex].querySelector('.translation-preview');
+                    if (previewElement) {
+                        previewElement.textContent = preview;
+                    }
+                }
+                
+                updateStats();
+            }
+            updateSaveButton();
+            
+            showNotification(`تم ترجمة النص بواسطة ${getServiceName(selectedService)} 🎯`, 'success');
+        }
+        
+    } catch (error) {
+        console.error('خطأ في الترجمة:', error);
+        
+        // معالجة أخطاء CORS بشكل خاص
+        if (error.message.includes('CORS') || error.message.includes('Failed to fetch')) {
+            const serviceName = getServiceName(selectedService);
+            showNotification(
+                `❌ خطأ CORS مع ${serviceName}\n\n💡 الحلول:\n` +
+                `• استخدم "MyMemory" (مجاني بدون مشاكل)\n` +
+                `• نزّل CORS extension للمتصفح\n` +
+                `• أو انسخ النص واستخدم الخدمة خارجياً`, 
+                'warning'
+            );
+        } else {
+            showNotification(`خطأ في الترجمة: ${error.message}`, 'error');
+        }
+    } finally {
+        hideLoading();
+    }
+}
+
+function getServiceName(service) {
+    const names = {
+        mymemory: 'MyMemory',
+        claude: 'Claude',
+        chatgpt: 'ChatGPT',
+        gemini: 'Gemini',
+        deepl: 'DeepL',
+        google: 'Google Translate'
+    };
+    return names[service] || service;
+}
+
+// MyMemory Translation (مجاني - بدون API key)
+async function translateWithMyMemory(text) {
+    const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|ar`);
+    
+    if (!response.ok) {
+        throw new Error('خطأ في خدمة MyMemory');
+    }
+    
+    const data = await response.json();
+    
+    if (data.responseStatus === 200) {
+        return data.responseData.translatedText.trim();
+    } else {
+        throw new Error('فشل في الترجمة من MyMemory');
+    }
+}
+
+// Claude Translation
+async function translateWithClaude(text) {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKeys.claude}`,
+            'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+            model: 'claude-3-sonnet-20240229',
+            max_tokens: 1000,
+            messages: [{
+                role: 'user',
+                content: `ترجم النص التالي من الإنجليزية إلى العربية. النص مخصص للعبة فيديو، لذا استخدم مصطلحات مناسبة للألعاب. أعطني الترجمة فقط بدون شرح إضافي:\n\n"${text}"`
+            }]
+        })
+    });
+    
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'خطأ في خدمة Claude');
+    }
+    
+    const data = await response.json();
+    return data.content[0].text.trim().replace(/["""]/g, '');
+}
+
+// ChatGPT Translation
+async function translateWithChatGPT(text) {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKeys.openai}`
+        },
+        body: JSON.stringify({
+            model: 'gpt-3.5-turbo',
+            messages: [{
+                role: 'user',
+                content: `ترجم النص التالي من الإنجليزية إلى العربية. النص مخصص للعبة فيديو، لذا استخدم مصطلحات مناسبة للألعاب. أعطني الترجمة فقط بدون شرح إضافي:\n\n"${text}"`
+            }],
+            max_tokens: 1000,
+            temperature: 0.3
+        })
+    });
+    
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'خطأ في خدمة ChatGPT');
+    }
+    
+    const data = await response.json();
+    return data.choices[0].message.content.trim().replace(/["""]/g, '');
+}
+
+// Gemini Translation
+async function translateWithGemini(text) {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKeys.gemini}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            contents: [{
+                parts: [{
+                    text: `ترجم النص التالي من الإنجليزية إلى العربية. النص مخصص للعبة فيديو، لذا استخدم مصطلحات مناسبة للألعاب. أعطني الترجمة فقط بدون شرح إضافي:\n\n"${text}"`
+                }]
+            }]
+        })
+    });
+    
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'خطأ في خدمة Gemini');
+    }
+    
+    const data = await response.json();
+    return data.candidates[0].content.parts[0].text.trim().replace(/["""]/g, '');
+}
+
+// DeepL Translation
+async function translateWithDeepL(text) {
+    const response = await fetch('https://api-free.deepl.com/v2/translate', {
+        method: 'POST',
+        headers: {
+            'Authorization': `DeepL-Auth-Key ${apiKeys.deepl}`,
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+            text: text,
+            source_lang: 'EN',
+            target_lang: 'AR'
+        })
+    });
+    
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'خطأ في خدمة DeepL');
+    }
+    
+    const data = await response.json();
+    return data.translations[0].text.trim();
+}
+
+// Google Translate
+async function translateWithGoogle(text) {
+    const response = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${apiKeys.google}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            q: text,
+            source: 'en',
+            target: 'ar'
+        })
+    });
+    
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'خطأ في خدمة Google Translate');
+    }
+    
+    const data = await response.json();
+    return data.data.translations[0].translatedText.trim();
+}
+
+// Loading Functions
+function showLoading() {
+    if (loadingOverlay) {
+        loadingOverlay.classList.add('show');
+        console.log('🔄 عرض شاشة التحميل');
+    }
+}
+
+function hideLoading() {
+    if (loadingOverlay) {
+        loadingOverlay.classList.remove('show');
+        console.log('✅ تم إخفاء شاشة التحميل');
+    }
+}
+
+// دالة إضافية لضمان إخفاء شاشة التحميل
+function ensureLoadingHidden() {
+    if (loadingOverlay && loadingOverlay.classList.contains('show')) {
+        hideLoading();
+        console.log('🛡️ إخفاء إجباري لشاشة التحميل');
+        return true;
+    }
+    return false;
+}
+
+// Close modal when clicking outside
+settingsModal.addEventListener('click', function(e) {
+    if (e.target === settingsModal) {
+        closeSettings();
+    }
+});
+
+// إخفاء شاشة التحميل عند النقر عليها
+if (loadingOverlay) {
+    loadingOverlay.addEventListener('click', function() {
+        hideLoading();
+        console.log('👆 تم إخفاء شاشة التحميل بالنقر');
+    });
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl+S to save
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        saveAllChanges();
+    }
+    
+    // Ctrl+T to translate
+    if (e.ctrlKey && e.key === 't') {
+        e.preventDefault();
+        translateCurrentText();
+    }
+    
+    // Escape to close modal or hide loading
+    if (e.key === 'Escape') {
+        closeSettings();
+        ensureLoadingHidden();
+    }
+});
  
