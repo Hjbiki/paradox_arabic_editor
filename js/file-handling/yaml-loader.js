@@ -243,8 +243,8 @@ function loadYamlContent(content, filename) {
     }
 }
 
-// تحميل ملف إنجليزي مرجعي من مجلد english (اختياري لمقارنة إضافية)
-async function loadEnglishReferenceFile(filename) {
+// Load English reference file for comparison
+async function loadEnglishReferenceFile(filename, retryCount = 0) {
     try {
         if (!filename) {
             console.log('ℹ️ لا يوجد اسم ملف لتحميل المرجع الإنجليزي');
@@ -254,12 +254,31 @@ async function loadEnglishReferenceFile(filename) {
         const englishFileName = filename.replace(/^.*[\\\/]/, ''); // إزالة المسار
         const englishFilePath = `english/${englishFileName}`;
         
-        console.log(`🔍 محاولة تحميل الملف الإنجليزي: ${englishFilePath}`);
+        console.log(`🔍 محاولة تحميل الملف الإنجليزي: ${englishFilePath} (المحاولة ${retryCount + 1})`);
         
         const response = await fetch(englishFilePath);
         
         if (!response.ok) {
-            console.log(`ℹ️ لا يوجد ملف إنجليزي مطابق: ${englishFilePath}`);
+            if (response.status === 404 && retryCount < 3) {
+                // إعادة المحاولة بعد تأخير متزايد (GitHub Pages قد يحتاج وقت)
+                const delay = (retryCount + 1) * 2000; // 2s, 4s, 6s
+                console.log(`⏳ GitHub Pages قد يحتاج وقت للتحديث. إعادة المحاولة خلال ${delay/1000} ثواني...`);
+                setTimeout(() => loadEnglishReferenceFile(filename, retryCount + 1), delay);
+                return;
+            }
+            
+            console.log(`ℹ️ لا يوجد ملف إنجليزي مطابق: ${englishFilePath} (بعد ${retryCount + 1} محاولات)`);
+            
+            // إشعار للمستخدم
+            if (typeof showNotification === 'function' && retryCount >= 3) {
+                showNotification(
+                    `📂 لم يتم العثور على الملف المرجعي\n\n` +
+                    `🔍 البحث عن: ${englishFilePath}\n` +
+                    `⏳ GitHub Pages قد يحتاج وقت لتحديث الملفات الجديدة\n\n` +
+                    `💡 جرب إعادة فتح الملف خلال بضع دقائق`,
+                    'warning'
+                );
+            }
             return;
         }
         

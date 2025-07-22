@@ -5,6 +5,7 @@ english/*
 !english/titles_l_english.yml
 !english/important_actions_l_english.yml
 !english/traits_l_english.yml
+!english/fleet_l_english.yml
 
 # استبعاد ملفات Python
 *.py

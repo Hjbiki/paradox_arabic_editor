@@ -1470,6 +1470,11 @@ window.showAllTests = function() {
             name: 'clearPreviousFileText()',
             description: '🗑️ مسح النص من الملف السابق فوراً',
             category: 'إصلاح'
+        },
+        {
+            name: 'testEnglishFileAccess()',
+            description: '🔍 اختبار وجود الملف المرجعي على GitHub Pages',
+            category: 'تشخيص'
         }
     ];
     
@@ -1503,6 +1508,7 @@ window.showAllTests = function() {
             '🏆 testCompleteTextEditingSolution() - شامل\n' +
             '🔄 testNavigationSaving() - الانتقال\n' +
             '📁 testNewFileLoading() - ملف جديد\n' +
+            '🔍 testEnglishFileAccess() - مرجع إنجليزي\n' +
             '🗑️ clearPreviousFileText() - مسح فوري\n' +
             '⚡ quickTestAfterFix() - سريع\n' +
             '📊 showSystemStatus() - حالة النظام\n\n' +
@@ -1519,6 +1525,7 @@ console.log('🧪 للحصول على قائمة جميع الاختبارات،
 console.log('🎯 للاختبار السريع للمشكلة الجديدة، اكتب: testNavigationSaving()');
 console.log('📁 لاختبار مشكلة الملف الجديد، اكتب: testNewFileLoading()');
 console.log('🗑️ لمسح النص من الملف السابق فوراً، اكتب: clearPreviousFileText()');
+console.log('🔍 لاختبار الملف المرجعي على GitHub Pages، اكتب: testEnglishFileAccess()');
 
 // اختبار خاص لمشكلة تحميل ملف جديد
 window.testNewFileLoading = function() {
@@ -1721,4 +1728,67 @@ window.clearPreviousFileText = function() {
     }
     
     console.log('✅ انتهى مسح البيانات من الملف السابق');
+};
+
+// دالة اختبار وجود الملف المرجعي على GitHub Pages
+window.testEnglishFileAccess = function() {
+    console.log('🧪 اختبار الوصول للملف المرجعي على GitHub Pages...');
+    
+    if (!currentFile) {
+        console.log('❌ لا يوجد ملف محمل حالياً');
+        if (typeof showNotification === 'function') {
+            showNotification('❌ قم بفتح ملف أولاً!', 'error');
+        }
+        return;
+    }
+    
+    const fileName = currentFile.name || currentFile;
+    const englishFileName = fileName.replace(/^.*[\\\/]/, '');
+    const englishFilePath = `english/${englishFileName}`;
+    const fullURL = `https://hjbiki.github.io/paradox_arabic_editor/${englishFilePath}`;
+    
+    console.log(`🔍 اختبار الرابط: ${fullURL}`);
+    
+    fetch(englishFilePath)
+        .then(response => {
+            console.log(`📊 استجابة الخادم: ${response.status} ${response.statusText}`);
+            
+            if (response.ok) {
+                return response.text();
+            } else {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+        })
+        .then(content => {
+            console.log(`✅ تم العثور على الملف! حجم المحتوى: ${content.length} حرف`);
+            console.log(`📖 بداية المحتوى: ${content.substring(0, 200)}...`);
+            
+            if (typeof showNotification === 'function') {
+                showNotification(
+                    `✅ الملف المرجعي متاح!\n\n` +
+                    `📁 الملف: ${englishFileName}\n` +
+                    `📏 الحجم: ${content.length} حرف\n` +
+                    `🌐 الرابط يعمل بشكل صحيح\n\n` +
+                    `💡 جرب إعادة فتح الملف الآن`,
+                    'success'
+                );
+            }
+        })
+        .catch(error => {
+            console.log(`❌ فشل في تحميل الملف: ${error.message}`);
+            
+            if (typeof showNotification === 'function') {
+                showNotification(
+                    `❌ الملف المرجعي غير متاح\n\n` +
+                    `📁 البحث عن: ${englishFileName}\n` +
+                    `🌐 الرابط: ${fullURL}\n` +
+                    `⚠️ الخطأ: ${error.message}\n\n` +
+                    `⏳ GitHub Pages قد يحتاج وقت إضافي\n` +
+                    `💡 جرب مرة أخرى خلال 5-10 دقائق`,
+                    'error'
+                );
+            }
+        });
+    
+    console.log('🚀 تم إطلاق اختبار الوصول للملف المرجعي...');
 };
