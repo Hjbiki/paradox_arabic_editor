@@ -15,12 +15,20 @@
             <div class="header-content">
                 <h1><i class="fas fa-language"></i> محرر نصوص بارادوكس</h1>
                 <div class="header-controls">
-                    <button class="btn btn-secondary" onclick="openSettings()">
-                        <i class="fas fa-cog"></i> إعدادات API
-                    </button>
-                    <button class="btn btn-primary" onclick="openFile()">
-                        <i class="fas fa-folder-open"></i> فتح ملف
-                    </button>
+                    <input type="file" id="fileInput" accept=".yml,.yaml" style="display: none;">
+                    <input type="file" id="englishFileInput" accept=".yml,.yaml" style="display: none;">
+                    
+                    <div class="control-section">
+                        <button id="apiSettingsBtn" class="btn btn-secondary">
+                            <i class="fas fa-cog"></i> إعدادات API
+                        </button>
+                        <button id="fileButton" class="btn btn-primary">
+                            <i class="fas fa-folder-open"></i> فتح ملف
+                        </button>
+                        <button id="loadEnglishBtn" class="btn btn-info" style="margin-left: 10px;">
+                            <i class="fas fa-upload"></i> رفع مرجع إنجليزي
+                        </button>
+                    </div>
                     <button class="btn btn-success save-btn unsaved" id="saveFileBtn" onclick="saveAllChanges()">
                         <i class="fas fa-save"></i> حفظ الملف
                     </button>
