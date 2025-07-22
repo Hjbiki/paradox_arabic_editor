@@ -1475,6 +1475,11 @@ window.showAllTests = function() {
             name: 'testEnglishFileAccess()',
             description: '🔍 اختبار وجود الملف المرجعي على GitHub Pages',
             category: 'تشخيص'
+        },
+        {
+            name: 'quickFixReference()',
+            description: '⚡ إصلاح سريع وفوري للمرجع الإنجليزي',
+            category: 'إصلاح'
         }
     ];
     
@@ -1509,6 +1514,7 @@ window.showAllTests = function() {
             '🔄 testNavigationSaving() - الانتقال\n' +
             '📁 testNewFileLoading() - ملف جديد\n' +
             '🔍 testEnglishFileAccess() - مرجع إنجليزي\n' +
+            '⚡ quickFixReference() - إصلاح سريع للمرجع\n' +
             '🗑️ clearPreviousFileText() - مسح فوري\n' +
             '⚡ quickTestAfterFix() - سريع\n' +
             '📊 showSystemStatus() - حالة النظام\n\n' +
@@ -1526,6 +1532,7 @@ console.log('🎯 للاختبار السريع للمشكلة الجديدة، 
 console.log('📁 لاختبار مشكلة الملف الجديد، اكتب: testNewFileLoading()');
 console.log('🗑️ لمسح النص من الملف السابق فوراً، اكتب: clearPreviousFileText()');
 console.log('🔍 لاختبار الملف المرجعي على GitHub Pages، اكتب: testEnglishFileAccess()');
+console.log('⚡ للإصلاح السريع للمرجع الإنجليزي، اكتب: quickFixReference()');
 
 // اختبار خاص لمشكلة تحميل ملف جديد
 window.testNewFileLoading = function() {
@@ -1791,4 +1798,100 @@ window.testEnglishFileAccess = function() {
         });
     
     console.log('🚀 تم إطلاق اختبار الوصول للملف المرجعي...');
+};
+
+// دالة سريعة للاختبار الفوري - للمستخدم المتعب
+window.quickFixReference = function() {
+    console.log('⚡ إصلاح سريع للمرجع الإنجليزي...');
+    
+    if (!currentFile) {
+        if (typeof showNotification === 'function') {
+            showNotification('❌ افتح ملف أولاً!', 'error');
+        }
+        return;
+    }
+    
+    const fileName = currentFile.name || currentFile;
+    
+    if (typeof showNotification === 'function') {
+        showNotification(
+            '⚡ إصلاح سريع للمرجع...\n\n' +
+            '1️⃣ فحص وجود الملف\n' +
+            '2️⃣ تحميل فوري\n' +
+            '3️⃣ إعادة المحاولة إذا فشل\n\n' +
+            '⏳ جاري العمل...',
+            'info'
+        );
+    }
+    
+    // محاولة 1: فحص مباشر
+    fetch(`english/${fileName}`)
+        .then(response => {
+            if (response.ok) {
+                return response.text();
+            }
+            throw new Error(`HTTP ${response.status}`);
+        })
+        .then(content => {
+            if (typeof showNotification === 'function') {
+                showNotification('✅ تم العثور على الملف! جاري التحميل...', 'success');
+            }
+            
+            // تحليل وتحميل المحتوى
+            if (typeof parseYAMLContent === 'function') {
+                const englishData = parseYAMLContent(content);
+                if (englishData && Object.keys(englishData).length > 0) {
+                    // تحديث البيانات
+                    window.englishTranslations = { ...window.englishTranslations, ...englishData };
+                    englishTranslations = { ...englishTranslations, ...englishData };
+                    
+                    // حفظ وإعادة عرض
+                    if (typeof saveToLocalStorage === 'function') {
+                        saveToLocalStorage();
+                    }
+                    
+                    if (typeof selectTranslationByIndex === 'function') {
+                        selectTranslationByIndex(currentIndex);
+                    }
+                    
+                    if (typeof showNotification === 'function') {
+                        showNotification(
+                            '🎉 تم تحميل المرجع بنجاح!\n\n' +
+                            `📁 الملف: ${fileName}\n` +
+                            `📊 النصوص: ${Object.keys(englishData).length}\n` +
+                            `✅ المرجع الآن متاح`,
+                            'success'
+                        );
+                    }
+                } else {
+                    throw new Error('الملف فارغ أو تالف');
+                }
+            }
+        })
+        .catch(error => {
+            console.log(`❌ فشل التحميل المباشر: ${error.message}`);
+            
+            // محاولة 2: استخدام الدالة الأصلية
+            if (typeof loadEnglishReferenceFile === 'function') {
+                if (typeof showNotification === 'function') {
+                    showNotification('🔄 محاولة بديلة...', 'info');
+                }
+                loadEnglishReferenceFile(fileName, 0);
+            } else {
+                if (typeof showNotification === 'function') {
+                    showNotification(
+                        '❌ فشل في تحميل المرجع\n\n' +
+                        `📁 الملف: ${fileName}\n` +
+                        `⚠️ السبب: ${error.message}\n\n` +
+                        '💡 تأكد من:\n' +
+                        '• وجود الملف في مجلد english\n' +
+                        '• اتصال الإنترنت\n' +
+                        '• انتظار تحديث GitHub Pages',
+                        'error'
+                    );
+                }
+            }
+        });
+    
+    console.log('⚡ تم تشغيل الإصلاح السريع...');
 };

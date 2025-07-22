@@ -185,6 +185,115 @@ function setupEventListeners() {
             handleFile(files[0]);
         }
     });
+    
+    // File input change listener
+    fileInput.addEventListener('change', handleFile);
+    
+    // English file input and button
+    const englishFileInput = document.getElementById('englishFileInput');
+    const loadEnglishBtn = document.getElementById('loadEnglishBtn');
+    
+    if (loadEnglishBtn && englishFileInput) {
+        loadEnglishBtn.addEventListener('click', function() {
+            englishFileInput.click();
+        });
+        
+        englishFileInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            if (typeof showNotification === 'function') {
+                showNotification(`📁 جاري قراءة الملف المرجعي: ${file.name}`, 'info');
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const content = e.target.result;
+                    
+                    // Parse the English file
+                    if (typeof parseYAMLContent === 'function') {
+                        const englishData = parseYAMLContent(content);
+                        
+                        if (englishData && Object.keys(englishData).length > 0) {
+                            // Update English translations
+                            if (!englishTranslations) {
+                                englishTranslations = {};
+                                window.englishTranslations = {};
+                            }
+                            
+                            // Merge with existing
+                            Object.assign(englishTranslations, englishData);
+                            Object.assign(window.englishTranslations, englishData);
+                            
+                            // Save to localStorage
+                            if (typeof saveToLocalStorage === 'function') {
+                                saveToLocalStorage();
+                            }
+                            
+                            // Refresh current view
+                            if (typeof selectTranslationByIndex === 'function') {
+                                selectTranslationByIndex(currentIndex);
+                            }
+                            
+                            if (typeof showNotification === 'function') {
+                                showNotification(
+                                    `✅ تم تحميل الملف المرجعي بنجاح!\n\n` +
+                                    `📁 الملف: ${file.name}\n` +
+                                    `📊 النصوص: ${Object.keys(englishData).length}\n` +
+                                    `✅ المرجع الآن متاح للمقارنة`,
+                                    'success'
+                                );
+                            }
+                            
+                            console.log(`✅ تم تحميل الملف المرجعي: ${file.name} (${Object.keys(englishData).length} نص)`);
+                        } else {
+                            if (typeof showNotification === 'function') {
+                                showNotification('❌ الملف فارغ أو لا يحتوي على نصوص صالحة', 'error');
+                            }
+                        }
+                    } else {
+                        if (typeof showNotification === 'function') {
+                            showNotification('❌ خطأ في تحليل الملف', 'error');
+                        }
+                    }
+                } catch (error) {
+                    console.error('خطأ في قراءة الملف المرجعي:', error);
+                    if (typeof showNotification === 'function') {
+                        showNotification(`❌ خطأ في قراءة الملف: ${error.message}`, 'error');
+                    }
+                }
+            };
+            
+            reader.onerror = function() {
+                if (typeof showNotification === 'function') {
+                    showNotification('❌ خطأ في قراءة الملف', 'error');
+                }
+            };
+            
+            reader.readAsText(file, 'utf-8');
+        });
+    }
+    
+    // File button click listener  
+    const fileButton = document.getElementById('fileButton');
+    if (fileButton) {
+        fileButton.addEventListener('click', function() {
+            if (fileInput) {
+                fileInput.click();
+            }
+        });
+    }
+    
+    // API Settings button
+    const apiSettingsBtn = document.getElementById('apiSettingsBtn');
+    if (apiSettingsBtn) {
+        apiSettingsBtn.addEventListener('click', function() {
+            if (typeof openSettings === 'function') {
+                openSettings();
+            }
+        });
+    }
 }
 
 // Keyboard shortcuts

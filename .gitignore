@@ -1,12 +1,3 @@
-# استبعاد معظم ملفات المجلد الإنجليزي (الكبيرة)
-english/*
-# لكن السماح لبعض الملفات المهمة
-!english/core_l_english.yml
-!english/titles_l_english.yml
-!english/important_actions_l_english.yml
-!english/traits_l_english.yml
-!english/fleet_l_english.yml
-
 # استبعاد ملفات Python
 *.py
 __pycache__/
