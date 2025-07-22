@@ -242,6 +242,34 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <!-- ===== تحميل الملفات JavaScript بالترتيب الصحيح ===== -->
+    
+    <!-- 1. المتغيرات العامة أولاً -->
+    <script src="js/core/globals.js"></script>
+    
+    <!-- 2. الدوال المساعدة والأمان -->
+    <script src="js/utils/helpers.js"></script>
+    <script src="js/utils/storage.js"></script>
+    <script src="js/utils/safety.js"></script>
+    
+    <!-- 3. معالجة الملفات -->
+    <script src="js/file-handling/yaml-loader.js"></script>
+    <script src="js/file-handling/file-operations.js"></script>
+    
+    <!-- 4. خدمات الترجمة -->
+    <script src="js/translation/services.js"></script>
+    <script src="js/translation/translation-ops.js"></script>
+    
+    <!-- 5. واجهة المستخدم -->
+    <script src="js/ui/blocks-mode.js"></script>
+    <script src="js/ui/controls.js"></script>
+    <script src="js/ui/notifications.js"></script>
+    
+    <!-- 6. دوال الاختبار -->
+    <script src="js/tests/test-functions.js"></script>
+    
+    <!-- 7. التهيئة الرئيسية في النهاية -->
+    <script src="js/core/main.js"></script>
+    
 </body>
 </html> 
